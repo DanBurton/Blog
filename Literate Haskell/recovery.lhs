@@ -155,7 +155,7 @@ reverse map on [1,2,3,4] in order to recover the original!
 You see, [4,1,3,2] can be transformed back into [1,2,3,4]
 by sorting it, right? We arrived at [4,1,3,2] by applying
 the choices of sorting [2,4,3,1] onto [1,2,3,4].
-So moving from [1,2,3,4] to [2,4,3,1] *represents*
+So moving from [1,2,3,4] to [4,1,3,2] *represents*
 moving from the original list to [1,2,3,4],
 since we made the *same choices* in both cases. So now
 what about moving back?
