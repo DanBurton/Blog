@@ -1,4 +1,5 @@
 #Hope for Haskell
+**Making Hackage and cabal-install more awesome**
 
 Haskellers, I'd like to know your thoughts about something.
 
@@ -113,4 +114,5 @@ than a single GSOC could produce,
 but I think in the long run
 Hope is the way to go.
 Please comment, in order of preference,
-on the reddit post, my google+ post, or the mailing lists.
+on the [reddit post](http://www.reddit.com/r/haskell/comments/pswbp/hope_for_haskell_making_hackage_and_cabalinstall/)
+or [my google+ post](https://plus.google.com/101638406996764973147/posts/GJtBFApwZEJ).
