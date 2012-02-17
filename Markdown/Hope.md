@@ -51,7 +51,7 @@ in order to make intelligent decisions.
     * easy way to upgrade your GHC and reinstall all your libraries
 * notify *upfront* if certain system libraries are needed (*.dll, *.so, alex, curl, etc)
     * this will require additional information, probably gathered from the website
-* exlore other interesting possibilities
+* explore other interesting possibilities
     * faster version of "cabal update" based on diffs, hashes
     * torrent package distributions
     * distribute pre-compiled binaries
@@ -69,7 +69,7 @@ in order to make intelligent decisions.
 * note assumptions about package (assumptions propagate to anyone depending on you)
     * cannot be installed alongside package X
     * must have certain libs or executables installed
-    * unix only
+    * unix / Windows / Mac only
     * assumptions/dependencies given in the .cabal file
 
 Basically Hope on the web would be an enhanced Hackage
