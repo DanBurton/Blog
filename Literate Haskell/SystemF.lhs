@@ -18,9 +18,7 @@ so I decided to blog about it.
 for the sake of space. See http://github.com/DanBurton/system-f
 for the module-ized version with few comments.
 
-
 ----- Preliminaries --------------------------------------------------
-
 
   I've provided a few synonyms around the Either type,
 in the event that I might want to change the error handling
@@ -45,9 +43,7 @@ I promise I won't abuse it too much.
 > get (Right x) = x
 > get (Left e)  = error e
 
-
 ---------- Data types ------------------------------------------------
-
 
   The language should provide some primitives.
 Here I've provided Num primitives which correspond to
@@ -258,14 +254,17 @@ Functions are left as an exercise to the reader.
 
 ---------------------------------------------------------------------
 
-  runApp is simple. If it is a function abstraction,
-just grab the Haskell function that was already provided.
-If it is a primitive, then provide a primitive implementation.
-
 > runApp :: Term (a -> b) -> ErrOr (Term a -> Term b)
 > runApp (Abs t f) = good f
 > runApp (Prim p) = runAppPrim p
 > runApp _ = err "unexpected non-abstraction used in application"
+
+  runApp is simple. If it is a function abstraction,
+just grab the Haskell function that was already provided.
+If it is a primitive, then provide a primitive implementation.
+
+> runAppPrim :: Primitive (a -> b) -> ErrOr (Term a -> Term b)
+> runAppPrim Succ = good $ \(Prim (Num n)) -> num (n + 1)
 
   Here's something really cute about GADTs.
 At first I had another case,
@@ -274,9 +273,6 @@ which followed the Succ case.
 But GHC warned me about overlapping patterns!
 Since I gave this function the type Primitive (a -> b) -> blah,
 GHC *knows* that the Num is not a possibility.
-
-> runAppPrim :: Primitive (a -> b) -> ErrOr (Term a -> Term b)
-> runAppPrim Succ = good $ \(Prim (Num n)) -> num (n + 1)
 
 ---------------------------------------------------------------------
 
