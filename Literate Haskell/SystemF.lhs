@@ -315,7 +315,7 @@ an ill-typed Term in the first place.
 The types of primitives are predetermined
 
 > primType :: Primitive a -> Type a
-> primType Num = NumTy
+> primType Num{} = NumTy
 > primType Succ  = FunTy NumTy NumTy
 
   Now even more fun! In order to determine the type of a function abstraction,
