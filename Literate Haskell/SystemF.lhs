@@ -76,7 +76,7 @@ then this could be extended with relative ease
 (e.g. CharTy, ListTy, etc).
 
   Notice how Types are also parameterized on Haskell types.
-We'll talk about that soon...promise!
+We'll talk about that soon... promise!
 
 > data Type :: * -> * where
 >   NumTy :: Type Integer
@@ -107,7 +107,7 @@ primarily that you are not constructing types using strange means.
 > eqTy _ NumTy NumTy = True
 > eqTy cs (FunTy dom rng) (FunTy dom' rng') = eqTy cs dom dom' && eqTy cs rng rng'
 > eqTy (c:cs) (VTy f) (VTy f') = eqTy cs (f (TyVar c)) (f' (TyVar c))
-> eqTy [] _ _ = error "Contratulations, you've used up all of the characters. Impressive."
+> eqTy [] _ _ = error "Congratulations, you've used up all of the characters. Impressive."
 > eqTy _ (TyVar c) (TyVar c') = c == c'
 > eqTy _ _ _ = False
 
@@ -233,7 +233,7 @@ we rely on helper functions runApp and runTApp respectively,
 which will either hit an error, or produce an actual Haskell function.
 
   We'll also define a "full eval" function,
-which creates an actuall Haskell value out of evaluating a Term
+which creates an actual Haskell value out of evaluating a Term
 (or produces an error).
 
 > eval :: Term a -> ErrOr a
@@ -315,7 +315,7 @@ an ill-typed Term in the first place.
 The types of primitives are predetermined
 
 > primType :: Primitive a -> Type a
-> primType Num{} = NumTy
+> primType Num = NumTy
 > primType Succ  = FunTy NumTy NumTy
 
   Now even more fun! In order to determine the type of a function abstraction,
