@@ -31,7 +31,10 @@ and people developing websites.
 Having a system for type-safe URLs with Snap will benefit anyone using the framework.
 Additionally, since Heist is a general-purpose HTML templating engine,
 code written for Heist can benefit anyone who uses the library
-whether they use Snap or not.Since the project also involves integration with web-routes, any improvements made to web-routes along the way will benefit current and future users of that library.
+whether they use Snap or not.
+Since the project also involves integration with web-routes,
+any improvements made to web-routes along the way
+will benefit current and future users of that library.
 
 
 #Plan
@@ -79,12 +82,21 @@ to be posted to /r/haskell.
 
 ## Implementation sketch
 
-...
+Users of Snap's type-safe URLs will specify
+a data type which will serve as a site map.
+They will also specify routing,
+which will simply define how to transform a URL
+into that data type, and vice versa.
+Serving a URL will be a simple matter of
+pulling apart the data type, which will contain
+all of the information necessary to identify the request
+in a natural way.
 
 ## Timetable and Deliverables
 
 Deliverables include blog posts and the working implementation,
-along with intermediate releases, a test suite, and documentation.
+along with intermediate releases, a test suite,
+benchmarks, and documentation.
 
 
 ### Community Bonding Period
@@ -139,7 +151,7 @@ about the best way to start actually implementing type-safe URLs for Snap.
 * June 29: blog post
 * July 5: release something decent, plus example usage.
 Should already be cooperating with snaplets.
-* July 6: blog post
+* July 6: general blog post - design and benchmarking type-safe urls
 * July 10: initial snapframework.com port, using code so far.
 * July 13: blog post
 * July 13: mid-term evaluation
@@ -150,7 +162,7 @@ early adoption.
 * July 26: release a solid test suite and examples, plus documentation
 * July 27: blog post
 * August 2: release "stable" version, and accompanying snapframework.com port
-* August 3: blog post
+* August 3: general blog post - announce stable version (more benchmarks)
 
 
 ### Wrap-up coding period
