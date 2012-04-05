@@ -91,6 +91,11 @@ Serving a URL will be a simple matter of
 pulling apart the data type, which will contain
 all of the information necessary to identify the request
 in a natural way.
+To create a URL, you simply pass a value of that data type
+to a renderer function.
+Heist could be made aware of URLs,
+or they could be rendered into Text before Heist even sees them.
+
 
 ## Timetable and Deliverables
 
