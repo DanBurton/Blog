@@ -26,13 +26,12 @@ rather having to hunt for broken links.
 
 ##Will this benefit any projects outside of Snap?
 
-The main focus will be on type-safe URLs specifically for Snap,
-but in the process,
-Heist, a general-purpose html templating engine,
-will also benefit from the enhancement.
-Analysis and potential use of web-routes will benefit that project as well.
-Any projects that make use of Snap or Heist will obviously benefit
-from enriching these frameworks.
+Snap is a web framework used by a number of other projects
+and people developing websites.
+Having a system for type-safe URLs with Snap will benefit anyone using the framework.
+Additionally, since Heist is a general-purpose HTML templating engine,
+code written for Heist can benefit anyone who uses the library
+whether they use Snap or not.Since the project also involves integration with web-routes, any improvements made to web-routes along the way will benefit current and future users of that library.
 
 
 #Plan
@@ -48,6 +47,10 @@ and should be a pleasure to use.
 Secondary goals include
 providing valuable assessment and feedback for the web-routes package,
 and enhancing Heist in such a way that it can continue to be used outside of Snap.
+I will also port snapframework.com to use type-safe URLs,
+which will increase the quality of the website,
+and will also serve as proof of the usability of the new system,
+helping us to get a good feel of how it works with Heist.
 
 
 ##Resources 
@@ -74,7 +77,11 @@ related to this specific task
 to be posted to /r/haskell.
 
 
-##Timetable and Deliverables
+## Implementation sketch
+
+...
+
+## Timetable and Deliverables
 
 Deliverables include blog posts and the working implementation,
 along with intermediate releases, a test suite, and documentation.
@@ -133,6 +140,7 @@ about the best way to start actually implementing type-safe URLs for Snap.
 * July 5: release something decent, plus example usage.
 Should already be cooperating with snaplets.
 * July 6: blog post
+* July 10: initial snapframework.com port, using code so far.
 * July 13: blog post
 * July 13: mid-term evaluation
 * July 19: release something nice, plus significant test cases.
@@ -141,7 +149,7 @@ early adoption.
 * July 20: blog post
 * July 26: release a solid test suite and examples, plus documentation
 * July 27: blog post
-* August 2: release "stable" version
+* August 2: release "stable" version, and accompanying snapframework.com port
 * August 3: blog post
 
 
