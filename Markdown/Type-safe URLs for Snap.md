@@ -2,12 +2,29 @@
 
 ##What is a type-safe URL?
 
-URLs are strings that identify the location of a resource.
-...
+> Type safe URLs encode all accessible paths of a web application
+> via an algebraic datatype
+> defined specifically for the web application at hand.
+> All urls within the application, then, are generated from this datatype,
+> which ensures statically that no [internal] dead links
+> are present anywhere in the application.
+
+~ [mightybyte's idea proposal](http://hackage.haskell.org/trac/summer-of-code/ticket/1621)
 
 ##Why should Snap provide type-safe URLs?
 
-...
+Snap inherits Haskell's emphasis on reliable, correct code.
+Type-safe URLs, implemented properly, have several advantages over
+raw string manipulation.
+
+* They are easier to use: you don't need to know the convention used
+to create the URL for a particular resource, instead, you simply need to know
+its combinator and input types. The programmer is freed from having to
+serialize the data encoded in a String representation of a URL.
+* They are more modular: refactoring the appearence of a particular kind of URL
+is done in a central location.
+* They are safer to use: typos can be caught via type checking,
+rather having to hunt for broken links.
 
 ##Will this benefit any projects outside of Snap?
 
