@@ -9,7 +9,7 @@
 > which ensures statically that no [internal] dead links
 > are present anywhere in the application.
 
-~ [mightybyte's idea proposal](http://hackage.haskell.org/trac/summer-of-code/ticket/1621)
+~ [Ozgun Ataman's idea proposal](http://hackage.haskell.org/trac/summer-of-code/ticket/1621)
 
 ##Why should Snap provide type-safe URLs?
 
@@ -77,6 +77,7 @@ to be posted to /r/haskell.
 Deliverables include blog posts and the working implementation,
 along with intermediate releases.
 
+
 ### Community Bonding Period
 
 From April 23 to May 20,
@@ -113,13 +114,43 @@ whether or not to pursue web-routes as a solution for Snap
 
 ### Primary coding period
 
-June 18 to August 5
-...
+From June 18 to August 5,
+I will spend the bulk of my time coding.
+By this point, the Snap community will have come to a conclusion
+about the best way to start actually implementing type-safe URLs for Snap.
+
+* June 22: blog post
+* June 28: release something that compiles
+* June 29: blog post
+* July 5: release something decent, plus example usage.
+Should already be cooperating with snaplets.
+* July 6: blog post
+* July 13: blog post
+* July 13: mid-term evaluation
+* July 19: release something nice, plus significant test cases.
+This should be good enough to actually recommend to real Snap projects for
+early adoption.
+* July 20: blog post
+* July 26: release a solid test suite and examples, plus documentation
+* July 27: blog post
+* August 2: release "stable" version
+* August 3: blog post
+
 
 ### Wrap-up coding period
 
-August 5 to August 20
-...
+From August 5 to August 20,
+I will refine the code,
+and beef up the documentation.
+
+* August 10: blog post
+* August 15: code reviewed; shining example of Snap style
+* August 17: blog post
+* August 20: comprehensive documentation complete.
+
+By August 20, there should be nothing holding my code back
+from being accepted with open arms into the Snap and Heist
+code bases.
 
 ### The end
 
