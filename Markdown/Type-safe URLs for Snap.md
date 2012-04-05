@@ -96,6 +96,8 @@ to a renderer function.
 Heist could be made aware of URLs,
 or they could be rendered into Text before Heist even sees them.
 
+This solution will be benchmarked against similar solutions.
+This solution should provide O(1) routing.
 
 ## Timetable and Deliverables
 
