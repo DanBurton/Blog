@@ -28,12 +28,13 @@ rather having to hunt for broken links.
 
 ##Will this benefit any projects outside of Snap?
 
-I hope so.
 The main focus will be on type-safe URLs specifically for Snap,
 but in the process,
 Heist, a general-purpose html templating engine,
-should also benefit from the enhancement.
-Analysis and potential use of web-routes should benefit that project as well.
+will also benefit from the enhancement.
+Analysis and potential use of web-routes will benefit that project as well.
+Any projects that make use of Snap or Heist will obviously benefit
+from improving these frameworks.
 
 
 #Plan
@@ -89,6 +90,10 @@ with the code base for Snap and Heist.
 * May 11: blog post
 * May 18: blog post
 
+I will begin weekly blog posts during this period,
+even though it is not part of the "actual"
+Summer of Code time.
+
 ### Primary research period
 
 From May 20 to June 17,
@@ -106,7 +111,9 @@ and is for experimenting and eventually determining
 if web-routes is right for Snap.
 
 * May 25: blog post
+* May 30: release code that compiles, uses Heist and web-routes
 * June 1: blog post
+* June 7: release possible (simple) imlementation using web-routes
 * June 8: summary blog post - type-safe URLs in Yesod, Play!, and Snap
 * June 10: decide, with Snap community,
 whether or not to pursue web-routes as a solution for Snap
@@ -120,7 +127,7 @@ By this point, the Snap community will have come to a conclusion
 about the best way to start actually implementing type-safe URLs for Snap.
 
 * June 22: blog post
-* June 28: release something that compiles
+* June 28: release something that compiles and works to some degree
 * June 29: blog post
 * July 5: release something decent, plus example usage.
 Should already be cooperating with snaplets.
