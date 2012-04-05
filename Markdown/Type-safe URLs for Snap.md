@@ -17,9 +17,7 @@ Snap inherits Haskell's emphasis on reliable, correct code.
 Type-safe URLs, implemented properly, have several advantages over
 raw string manipulation.
 
-* They are easier to use: you don't need to know the convention used
-to create the URL for a particular resource, instead, you simply need to know
-its combinator and input types. The programmer is freed from having to
+* They are easier to use: the programmer is freed from having to
 serialize the data encoded in a String representation of a URL.
 * They are more modular: refactoring the appearence of a particular kind of URL
 is done in a central location.
@@ -34,7 +32,7 @@ Heist, a general-purpose html templating engine,
 will also benefit from the enhancement.
 Analysis and potential use of web-routes will benefit that project as well.
 Any projects that make use of Snap or Heist will obviously benefit
-from improving these frameworks.
+from enriching these frameworks.
 
 
 #Plan
@@ -54,7 +52,10 @@ and enhancing Heist in such a way that it can continue to be used outside of Sna
 
 ##Resources 
 
-Yesod, Play!, and web-routes all provide solutions for type-safe URLs.
+[Yesod](http://www.yesodweb.com/),
+[Play!](http://www.playframework.org/),
+and [web-routes](http://hackage.haskell.org/package/web-routes)
+all provide solutions for type-safe URLs.
 Reviewing these implementations will undoubtedly be valuable information
 to consider when crafting a solution for Snap.
 
@@ -76,7 +77,7 @@ to be posted to /r/haskell.
 ##Timetable and Deliverables
 
 Deliverables include blog posts and the working implementation,
-along with intermediate releases.
+along with intermediate releases, a test suite, and documentation.
 
 
 ### Community Bonding Period
