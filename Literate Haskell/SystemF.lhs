@@ -1,3 +1,7 @@
+
+Background
+=====================================================================
+
   As an exercise while reading through
 Types and Programming Languages,
 I decided to implement an interpreter
@@ -15,10 +19,13 @@ so I decided to blog about it.
 > import Control.Monad
 
   I've left the module declaration out of this version
-for the sake of space. See http://github.com/DanBurton/system-f
+for the sake of space. See
+[http://github.com/DanBurton/system-f](http://github.com/DanBurton/system-f)
 for the module-ized version with few comments.
 
------ Preliminaries --------------------------------------------------
+
+Preliminaries
+=====================================================================
 
   I've provided a few synonyms around the Either type,
 in the event that I might want to change the error handling
@@ -43,12 +50,14 @@ I promise I won't abuse it too much.
 > get (Right x) = x
 > get (Left e)  = error e
 
----------- Data types ------------------------------------------------
+
+Data types
+=====================================================================
 
   The language should provide some primitives.
 Here I've provided Num primitives which correspond to
-natural numbers, sort of. Primitive doesn't just have kind *,
-it has kind * -> *, meaning primitives are parameterized over
+natural numbers, sort of. Primitive doesn't just have kind `*`,
+it has kind `* -> *`, meaning primitives are parameterized over
 some Haskell type. More on this later.
 
 > data Primitive :: * -> * where
@@ -61,7 +70,7 @@ This is a *value*, so Haskell doesn't confuse it with
 the typeclass of the same name. This might cause problems
 if I turned on some of the extra kind-wankery GHC provides.
 
-----------------------------------------------------------------------
+---------------------------------------------------------------------
 
   Types are a little more interesting.
 In System F, Types are also "values" in the language:
@@ -148,16 +157,16 @@ primitives, function abstractions, function applications,
 type abstractions, and type applications.
 Look very carefully at the type signature for each of these constructors.
 
-  A Primitive parameterized on Haskell type `a' turns into
-a Term parameterized on Haskell type `a'.
+  A Primitive parameterized on Haskell type `a` turns into
+a Term parameterized on Haskell type `a`.
 
   An Abstraction requires you to declare the input Type
 and to provide a function from Term to Term. Notice how
-these are parameterized on types `a' and `b' in a nifty way.
+these are parameterized on types `a` and `b` in a nifty way.
 
   An Application requires a Term parameterized on a function
-from `a' to `b', and a Term parameterized on `a', and creates
-a term parameterized on `b'.
+from `a` to `b`, and a Term parameterized on `a`, and creates
+a term parameterized on `b`.
 
   Type abstractions and applications are similar to those of functions.
 The only differences are the use of the V type,
@@ -195,9 +204,9 @@ Eq on Types, but I was too lazy to do it.
 >   (==) = undefined
 
   Here's a related trick to make our System F even more convenient,
-by defining fromInteger = num for Term Integer, we can now use
+by defining `fromInteger = num` for `Term Integer`, we can now use
 numeric literals as primitive values in our System F language.
-`num' is defined near the end, along with a few other
+`num` is defined near the end, along with a few other
 language conveniences.
 
 > instance Num (Term Integer) where
@@ -209,10 +218,12 @@ language conveniences.
 >   signum = undefined
 >   negate = undefined
 
--------------------------- evaluation -------------------------------
+
+Evaluation
+=====================================================================
 
   Now for evaluation. The code is almost insanely simple.
-First, let's define eval', which reduces terms as much as possible,
+First, let's define `eval'`, which reduces terms as much as possible,
 using a big-step approach.
 
 > eval' :: Term a -> ErrOr (Term a)
@@ -229,11 +240,11 @@ using a big-step approach.
 >   eval' res
 
   Here for function and type applications,
-we rely on helper functions runApp and runTApp respectively,
+we rely on helper functions `runApp` and `runTApp` respectively,
 which will either hit an error, or produce an actual Haskell function.
 
   We'll also define a "full eval" function,
-which creates an actual Haskell value out of evaluating a Term
+which creates an actual Haskell value out of evaluating a `Term`
 (or produces an error).
 
 > eval :: Term a -> ErrOr a
@@ -268,26 +279,28 @@ If it is a primitive, then provide a primitive implementation.
 
   Here's something really cute about GADTs.
 At first I had another case,
-runAppPrim _ = err "blah blah"
-which followed the Succ case.
+`runAppPrim _ = err "blah blah"`
+which followed the `Succ` case.
 But GHC warned me about overlapping patterns!
-Since I gave this function the type Primitive (a -> b) -> blah,
-GHC *knows* that the Num is not a possibility.
+Since I gave this function the type `Primitive (a -> b) -> blah`,
+GHC *knows* that the `Num` is not a possibility.
 
 ---------------------------------------------------------------------
 
   There are no primitives that are type abstractions,
-so runTApp is even simpler than runApp.
+so `runTApp` is even simpler than `runApp`.
 
 > runTApp :: Term (V a b) -> ErrOr (Type a -> Term b)
 > runTApp (TAbs f) = good f
 > runTApp _ = err "runTApp failed unexpectedly"
 
------------------------- typing -------------------------------------
+
+Typing
+=====================================================================
 
   Now for another fun part, type reconstruction!
-Given a Term, we want to discover its Type.
-But here's something really cool: the Term and the Type
+Given a `Term`, we want to discover its `Type`.
+But here's something really cool: the `Term` and the `Type`
 have to be parameterized over *the same Haskell type*!
 Basically, Haskell's type checker will prevent me from
 writing my type checker incorrectly.
@@ -339,29 +352,34 @@ and to get a value of TyVar c, just create an Unknown c! Cute.
 
   More seriously, this function is a testament to the awesomeness of GADTs.
 Check this out:
+
+    [haskell]
     num 0 :: Term Integer
     l foo (\_ -> genTy bar) :: Term (Foo -> Bar)
+
 (l = Abs, see below)
 genTy cannot possibly be well-typed, because these two expressions
 have entirely different (and entirely concrete, non-polymorphic) types!
 
   ... and yet it is, and this is the real magic of parameterizing *both*
-Types and Terms on Haskell types. Since NumTy is parameterized on `Integer',
-that means that the result of `genTy NumTy' must be a `Term Integer'.
-But since `FunTy foo bar' is parameterized on `Foo -> Bar',
-that means that the result of `genTy (FunTy foo bar)' must be a `Term (Foo -> Bar)'.
+Types and Terms on Haskell types. Since NumTy is parameterized on `Integer`,
+that means that the result of `genTy NumTy` must be a `Term Integer'.
+But since `FunTy foo bar` is parameterized on `Foo -> Bar`,
+that means that the result of `genTy (FunTy foo bar)` must be a `Term (Foo -> Bar)`.
 So genTy, which would otherwise be impossible to type,
 is, in fact, well typed! All thanks to (quite natural) use of GADTs and
 Haskell's sexy types.
 
 tl;dr - parametric polymorphism + GADTs = awesomesauce
 
------------------ language primitives -------------------------------
+
+Language primitives
+=====================================================================
 
   These are just a few "primitives".
 Here I use the term "primitive" to mean "you should actually write
 System F expressions using these". Although with the Num typeclass hack,
-`num' should be unnecessary.
+`num` should be unnecessary.
 
 > num = Prim . Num
 > succ = Prim Succ
@@ -372,7 +390,9 @@ System F expressions using these". Although with the Num typeclass hack,
 > app = App
 > tapp = TApp
 
--------------------- basic testing functions-------------------------
+
+Basic testing functions
+=====================================================================
 
   Let's play around, defining a couple functions in System F.
 You'll notice how verbose it is to perform function and type applications.
@@ -404,21 +424,20 @@ Use the twice function on itself!
 
 Example usage:
 
-ghci> app (app (tapp twice NumTy) succ) 0
-2 : Num
+    [ghci]
+    app (app (tapp twice NumTy) succ) 0
 
 I wish this could be written in a more System F style:
 
-ghci> [| twice NumTy succ 0 |]
+    [haskell]
+    [| twice NumTy succ 0 |]
 
 ----------------------------------------------------------------------
 
 Here's a cool thing to check out. Go into ghci and try out the following:
 
-ghci> :type const'
-const' :: Term (V b (V a (b -> a -> b)))
-
-ghci> typeOf const'
-Right (∀ X. (∀ Y. (X -> (Y -> X))))
+    [ghci]
+    :type const'
+    typeOf const'
 
 Cool, huh? The inferred Haskell type really captures a lot of the meaning.

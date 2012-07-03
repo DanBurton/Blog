@@ -5,7 +5,7 @@ You additionally make the assumption that the original list
 was a permutation of [1 .. n].
 
 > {-# LANGUAGE BangPatterns #-}
-
+> 
 > import Control.Applicative
 > import Control.Monad
 > import Control.Monad.Writer.Lazy
@@ -78,16 +78,16 @@ made by the merge sort algorithm, which you may have noticed
 in the code above. Nothing too special.
 
 > data Choice = LeftFirst | RightFirst deriving (Eq)
-
+>
 > instance Show Choice where
 >   show c = [fromChoice c]
-
+>
 > fromChoice LeftFirst = '1'
 > fromChoice RightFirst = '2'
-
+>
 > toChoice '1' = LeftFirst
 > toChoice '2' = RightFirst
-
+>
 > toOrdering LeftFirst = LT
 > toOrdering RightFirst = GT
 
@@ -133,13 +133,11 @@ and execWriter (keep log, discard result) respectively.
 
   Now consider one particular example given by Facebook:
 n = 4, choices = 12212, solution = [2,4,3,1]. Let's play around
-in ghci a little bit. Recall that in ghci,
-"it" refers to the result of the previous query.
+in ghci a little bit.
 
-ghci> recordChoices [2,4,3,1]
-[1,2,2,1,2]
-ghci> runChoices it [1,2,3,4]
-[4,1,3,2]
+    [ghci]
+    recordChoices [2,4,3,1]                          -- <!--- [1,2,2,1,2] -->
+    runChoices (recordChoices [2,4,3,1]) [1,2,3,4]   -- <!--- [4,1,3,2]   -->
 
   There are a couple things to notice about this.
 First of all, the mapping. Compare [2,4,3,1] to [1,2,3,4].
@@ -195,10 +193,10 @@ with only light modification on pretty much every problem:
 
 > inFileName = "recovery-in.txt"
 > outFileName = "recovery-out.txt"
-
+>
 > readInt :: String -> Int
 > readInt = read
-
+>
 > zipSelf :: [a] -> [(a,a)]
 > zipSelf (x:y:xs) = (x,y) : zipSelf xs
 > zipSelf _ = []
