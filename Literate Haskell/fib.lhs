@@ -84,4 +84,4 @@ This solution is still too slow, however, to reasonably compute
 `fibSeqAt (10^8) (3^13) (5^10)`.
 
 You can play with this code yourself by downloading
-[fib.lhs](https://raw.github.com/DanBurton/Blog/master/Literate%20Haskell/rib.lhs).
+[fib.lhs](https://raw.github.com/DanBurton/Blog/master/Literate%20Haskell/fib.lhs).
