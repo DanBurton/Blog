@@ -128,7 +128,7 @@ tying the knot, and fuel.
 >       this = Cell prev' newVal next'
 >       (next', last') = evolve' r (cellNext c) (pred i) this first'
 >   in (this, last')
->
+
 > evolveCellVal :: Rule -> Cell -> Bit
 > evolveCellVal r (Cell prev x next) =
 >   lookupRule r (show [cellVal prev, x, cellVal next])
@@ -160,7 +160,6 @@ Let's play a little bit and see how it goes:
     runRule 110 10 "0000011111000000"
     runRule 110 10 "10000000101000000001"
 
-You can play with this code yourself by downloading the .lhs file:
+You can play with this code yourself by downloading
+[rule110.lhs](https://raw.github.com/DanBurton/Blog/master/Literate%20Haskell/rule110.lhs).
 
-    [bash]
-    git clone 
