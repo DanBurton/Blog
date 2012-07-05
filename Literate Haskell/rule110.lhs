@@ -1,7 +1,8 @@
 The Challenge
 ==================================================
 
-The one-dimensional simple cellular automata Rule 110
+The one-dimensional simple cellular automata
+[Rule 110](http://en.wikipedia.org/wiki/Rule_110)
 is the only such cellular automata currently known to be turing-complete,
 and many people say it is the simplest known turing-complete system.
 
@@ -15,12 +16,16 @@ You may chose to implement rule 124 instead if you like
 Bonus points if your program can take
 an arbitrary rule integer from 0-255 as input
 and run that rule instead!
-                
+
+[/r/dailyprogrammer challenge #72 easy](http://www.reddit.com/r/dailyprogrammer/comments/w1e7x/742012_challenge_72_easy/)
 
 My Response
 ==================================================
 
 Time for some knot-tying!
+
+Bits
+--------------------------------------------------
 
 Well, first, let's start off with a simple datatype to represent "bits".
 
@@ -39,6 +44,9 @@ Well, first, let's start off with a simple datatype to represent "bits".
 >   show b = [toChar b]
 >   showList bs s = map toChar bs ++ s
 
+Cells and CellLoops
+--------------------------------------------------
+
 OK, now a type to represent a cell. Cells have two neighbors and a value.
 
 > data Cell = Cell { cellPrev :: Cell, cellVal :: !Bit, cellNext :: Cell }
@@ -56,6 +64,9 @@ so we'll wrap up our cells in another data type to keep our bearings:
 
 A CellLoop chooses a definitive "starting point" cell,
 and contains the "length" of the loop.
+
+Creating a CellLoop from a list of Bits
+--------------------------------------------------
 
 Now, given a list of Bits, we want to be able to create a CellLoop.
 We'll do that by tying the knot like so:
@@ -88,6 +99,9 @@ In the base case, you can see that it simply regurgitates its inputs.
 In the interesting case, this and next are defined with mutual recursion,
 and letrec magic ties them together.
 
+Converting back
+--------------------------------------------------
+
 Converting back to a list of bits is much easier,
 we just use the length that we stored as "fuel",
 and when the fuel runs out, we stop.
@@ -107,6 +121,9 @@ than just a list of Bits, so we'll make a show instance accordingly:
 >     where
 >       toChar' I = '*'
 >       toChar' O = ' '
+
+Evolution
+--------------------------------------------------
 
 Now for the final hurdle: evolution.
 We'd like to write a function
@@ -147,6 +164,9 @@ It should be straightforward,
 given a technique to turn an integer into a list of bits,
 to parameterize evolveCellVal (and by extension, evolve) on any rule.
 This is left as an exercise to the reader.
+
+Play time
+--------------------------------------------------
 
 Let's write a little helper to aid us in playing with what we've got:
 
