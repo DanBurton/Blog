@@ -105,3 +105,6 @@ There are obviously different tradeoffs to using ContT,
 and I certainly do endorse using EitherT and MaybeT for such things.
 I just find it lamentable that ContT is treated like the ugly duckling.
 `ContT` is not to be feared.
+
+To play with this code, download
+[loop.lhs](https://raw.github.com/DanBurton/Blog/master/Literate%20Haskell/loop.lhs).
