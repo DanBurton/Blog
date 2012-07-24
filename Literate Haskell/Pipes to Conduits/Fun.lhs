@@ -207,4 +207,4 @@ Here's a little bit to get you started.
     await = ???
 
 To play with this code, download
-[Fun.lhs](http://example.com/todo/Fun.lhs).
+[Fun.lhs](https://raw.github.com/DanBurton/Blog/master/Literate%20Haskell/Pipes%20to%20Conduits/Fun.lhs).
