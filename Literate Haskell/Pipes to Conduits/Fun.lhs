@@ -53,7 +53,7 @@ It admits the type variable, but is otherwise
 nothing but the trivial value, `()`.
 
 > instance Functor Empty where
->   fmap f Empty = Empty
+>   fmap _f Empty = Empty
 
 When used with the Free Monad Transformer,
 the Empty functor allows you to short-circuit computation.
@@ -73,7 +73,7 @@ some actual value, which remains untouched
 by functor operations.
 
 > instance Functor (Const a) where
->   fmap f (Const a) = Const a
+>   fmap _f (Const a) = Const a
 
 When used with the Free Monad Transformer,
 the Const functor allows you to
