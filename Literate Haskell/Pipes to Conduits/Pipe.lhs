@@ -182,8 +182,9 @@ is *downstream* of p2, and p2 is *upstream* of p1.
 >   let p1' = FreeT $ return x1
 >   runFreeT $ pipeCase x1
 
-We begin by running the downstream monad and
-performing case analysis on the resultant FreeF.
+We begin by running the downstream monadic action
+(recall that FreeT is just a newtype around `m (FreeF ...)`)
+and performing case analysis on the resultant FreeF.
 
 >   {- Return -} (\r      -> return r)
 >   {- Yield  -} (\o next -> wrap $ yieldF o (next <+< p2))
@@ -252,6 +253,13 @@ so it shouldn't be yielding anything in the first place.
 >   {- Yield  -} (\_o next -> runPipe next)
 >   {- Await  -} (\f       -> runPipe $ f ())
 
+Note that `runPipe` and `<+<` could be considered
+two different "interpreters" for pipes.
+The Free monad just gives us a convenient way
+to assemble the puzzle pieces,
+but it is up to us to give the final result meaning
+by interpreting it. Conduit's "connect and resume" operator
+could be considered yet another "interpreter".
 
 Some basic pipes
 -------------------------------------------------
@@ -259,20 +267,31 @@ Some basic pipes
 Here's just a few pipes to play with.
 Fire up ghci and make sure they work as expected.
 
-> pipe :: Monad m => (i -> o) -> Pipe i o m r
-> pipe f = forever $ await >>= yield . f
-
-> idP :: Monad m => Pipe i i m r
-> idP = pipe id
-
 > fromList :: Monad m => [o] -> Producer o m ()
 > fromList = mapM_ yield
 
+Pay attention to how the following are implemented,
+because next time we're going to have to change them.
+
+> pipe :: Monad m => (i -> o) -> Pipe i o m r
+> pipe f = forever $ await >>= yield . f
+> 
+> idP :: Monad m => Pipe i i m r
+> idP = pipe id
+> 
 > filterP :: Monad m => (i -> Bool) -> Pipe i i m r
 > filterP test = forever $ await >>= \x -> when (test x) (yield x)
-
+> 
 > printer :: Show i => Consumer i IO r
 > printer = forever $ await >>= lift . print
+
+Testing...
+
+    [ghci]
+    runPipe $ printer <+< pipe (+1) <+< filterP even <+< fromList [1 .. 5]
+    runPipe $ idP <+< idP <+< return "Hello, pipes" <+< idP <+< idP
+    runPipe $ return "Downstream drives" <+< return "Upstream doesn't"
+    runPipe $ (printer >> return "not hijacked") <+< return "hijacked"
 
 Next time
 -------------------------------------------------
@@ -280,7 +299,8 @@ Next time
 Await and yield are great, but the greedy return shutdown behavior
 is somewhat disturbing. Next time, we'll tweak the Pipe type,
 giving it an "upstream result" type parameter. With that,
-result types will be composed, too!
+result types will be composed, too, and that way
+an upstream pipe won't be able to hijack a downstream pipe!
 
     type PipeF i o u = ???
     type Pipe i o u = FreeT (PipeF i o u)
