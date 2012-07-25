@@ -20,7 +20,8 @@ though serious discussion of such will be left
 to later posts.
 
 > {-# LANGUAGE TypeOperators #-}
-
+> {-# OPTIONS_GHC -Wall #-}
+> 
 > module Fun where
 
 
@@ -186,6 +187,7 @@ Exercise to the reader: try it yourself
 before you read the next post!
 Here's a little bit to get you started.
 
+    [haskell]
     {-# LANGUAGE TypeOperators #-}
     module Pipe where
 
@@ -208,3 +210,4 @@ Here's a little bit to get you started.
 
 To play with this code, download
 [Fun.lhs](https://raw.github.com/DanBurton/Blog/master/Literate%20Haskell/Pipes%20to%20Conduits/Fun.lhs).
+
