@@ -306,4 +306,9 @@ an upstream pipe won't be able to hijack a downstream pipe!
     type Pipe i o u = FreeT (PipeF i o u)
     (<+<) :: Pipe i' o u' m r -> Pipe i i' u m u' -> Pipe i o u m r
 
+Play around with this code by downloading
+[Pipe.lhs](https://raw.github.com/DanBurton/Blog/master/Literate%20Haskell/Pipes%20to%20Conduits/Pipe.lhs).
+(You'll need
+[Fun.lhs](https://raw.github.com/DanBurton/Blog/master/Literate%20Haskell/Pipes%20to%20Conduits/Fun.lhs)
+from last time in the same directory).
 
