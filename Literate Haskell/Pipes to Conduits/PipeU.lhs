@@ -272,13 +272,13 @@ the upstream result type.
 
 > pipe :: Monad m => (i -> o) -> Pipe i o u m u
 > pipe f = awaitForever $ yield . f
-
+> 
 > idP :: Monad m => Pipe i i u m u
 > idP = pipe id
-
+> 
 > filterP :: Monad m => (i -> Bool) -> Pipe i i u m u
 > filterP test = awaitForever $ \x -> when (test x) (yield x)
-
+> 
 > printer :: Show i => Consumer i u IO u
 > printer = awaitForever $ lift . print
 
