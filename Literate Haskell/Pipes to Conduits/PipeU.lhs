@@ -1,6 +1,3 @@
-> {-# LANGUAGE TypeOperators #-}
-> {-# OPTIONS_GHC -Wall #-}
-
 Last time, we reimplemented Control.Pipe,
 with basic `await` and `yield` functionality.
 However, in order to compose two pipes,
@@ -12,6 +9,9 @@ This time, we'll modify the `await` primitive,
 forcing the user to deal with the possibility
 that the upstream pipe has completed and returned a value.
 
+> {-# LANGUAGE TypeOperators #-}
+> {-# OPTIONS_GHC -Wall #-}
+> 
 > module PipeU where
 > 
 > import Control.Monad.Trans.Free (FreeT(..), FreeF(..), liftF, wrap)
@@ -178,6 +178,7 @@ explining this every time it comes up.
 
 Now, here was my first impulse for handling the upstream return:
 
+    [haskell]
     {- Return -} (\u' -> g1 u')
 
 Simple, right? If you have an upstream result, then guess what,
@@ -189,6 +190,7 @@ Well that's a problem, see, because our result type is supposed to be
 `Pipe i o u m r`: that's `u` not `u'`. So what do we do?
 Well, we could compose it with an exploding bomb to get the correct type:
 
+    [haskell]
     {- Return -} (\u' -> g1 u' <+< error "kaboom!")
 
 That's not very nice. We could write in the docs that you should never
