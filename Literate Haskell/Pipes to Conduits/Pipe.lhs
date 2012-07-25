@@ -1,6 +1,3 @@
-> {-# LANGUAGE TypeOperators #-}
-> {-# OPTIONS_GHC -Wall #-}
-
 Last time we quickly reviewed several
 basic Functors in Haskell, and various ways
 to combine them. Today, we will
@@ -9,6 +6,9 @@ and rewrite Control.Pipe
 (not that it needs rewriting;
 we're just doing this for fun).
 
+> {-# LANGUAGE TypeOperators #-}
+> {-# OPTIONS_GHC -Wall #-}
+> 
 > module Pipe where
 > 
 > import Control.Monad.Trans.Free (FreeT(..), FreeF(..), liftF, wrap)
@@ -114,7 +114,8 @@ we'll make a case assessment function.
 
 First, consider the FreeT type:
 
-    newtype FreeT f r m = FreeT
+    [haskell]
+    newtype FreeT f m r = FreeT
       { runFreeT :: m (FreeF f r (FreeT f m r)) }
 
 Ugh! It looks daunting, but it's really quite straightforward.
@@ -302,6 +303,7 @@ giving it an "upstream result" type parameter. With that,
 result types will be composed, too, and that way
 an upstream pipe won't be able to hijack a downstream pipe!
 
+    [haskell]
     type PipeF i o u = ???
     type Pipe i o u = FreeT (PipeF i o u)
     (<+<) :: Pipe i' o u' m r -> Pipe i i' u m u' -> Pipe i o u m r
