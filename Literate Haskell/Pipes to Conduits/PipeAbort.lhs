@@ -173,7 +173,7 @@ We're going to change that behavior now. Instead,
 we will cause an `abort` if downstream ever `await`s after receiving the
 upstream's final result.
 
->     {- Return -} (\u'     -> g1 u' <+< abort)
+>     {- Return -} (\u'     -> g1 u' <+< abort) -- downstream gets one last shot
 
 The rest remains as before.
 
@@ -188,8 +188,9 @@ As always, downstream drives, so if the upstream pipe is `abort`,
 but the downstream never consults upstream, then downstream can
 continue on its merry way for as long as it wants.
 
+$$\forall p \in Pipe, abort \circ p \equiv abort$$
 
-$$p = Producer \rightarrow p \circ abort \equiv p$$
+$$\forall p \in Producer, p \circ abort \equiv p$$
 
 
 > (>+>) :: Monad m => Pipe i i' u m u' -> Pipe i' o u' m r -> Pipe i o u m r
