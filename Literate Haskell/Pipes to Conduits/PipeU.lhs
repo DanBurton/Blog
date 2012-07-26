@@ -26,10 +26,8 @@ Functors
 --------------------------------------------------
 
 We'll use all the same functors as before.
-
 You can compare this code with the code from last time
 to see exactly which changes have taken place.
-
 We'll add one more convention, which is to use
 the type variable `u` to describe the return type
 of an upstream pipe.
@@ -79,7 +77,9 @@ and Pipelines, since they will never get one anyways.
 Remember: Consumers are always as far *downstream* as possible,
 while Producers are always as far *upstream* as possible.
 A Pipeline is neither up nor down, since it is self-contained
-and therefore cannot be sensibly composed with any other pipes.
+and therefore cannot be sensibly composed with any other pipes,
+except trivial ones such as `idP`.
+
 
 
 Working with PipeF
@@ -88,7 +88,7 @@ Working with PipeF
 Our "lifting" helpers remain the same,
 except we must add the type variable `u`
 everywhere we have an `AwaitU`, `PipeF`, or `Pipe`.
-`awaitF` now has two inputs: the function to deal with
+Notice how `awaitF` now has two inputs: the function to deal with
 a regular yielded value `f :: i -> next`,
 and the function to deal with
 a returned result `g :: u -> next`.
@@ -118,6 +118,35 @@ that is bundled with an `AwaitU`.
 >                     _ k _ = k o next
 > pipeCase (Wrap (R (Await f :&: Await g)))
 >                     _ _ k = k f g
+
+Now stop; let's have a little chat about `awaitF`.
+We expect the user to somehow indirectly supply a function
+`g :: u -> Pipe i o u m r` whenever they `await`,
+to handle the possibility that the upstream pipe has completed.
+But if that's the case, wouldn't it make more sense to shut off
+the input and upstream ends of the pipe afterwards?
+`g :: u -> Pipe () o () m r`,
+or using a synonym, `g :: u -> Producer o m r`.
+Well perhaps it would, but that would mean that the type of `g`
+does not fit into the pattern `u -> next`, which means we lose some
+amount of convenience whenever we deal with the `await` primitive.
+
+For this blog series, I have chosen to proceed with *not* shutting off
+the input ends, to stay closer to Conduit behavior.
+The reason for this is simply convenience.
+If we didn't do it this way, we wouldn't be able to use
+`x <- await` monadic sugar any more.
+Not even Control.Frame forcibly closes the input end for you:
+you are expected to manually `close` the input end yourself
+after receiving the upstream termination signal
+or else experience automatic pipeline shutdown if you await again;
+this is presumably for the same sugar/convenience reasons.
+
+In part 3 of this series, we will add the ability to behave like Frame
+in this regard: automatic shutdown after receiving the termination signal.
+Then in part 4 we will also provide the downstream pipe the opportunity
+to continue even after an upstream shutdown. Spoilers!
+For now, just forget I said all that. ;)
 
 
 Pipe primitives
@@ -159,6 +188,13 @@ but also result types
 
     (u => u') >+> (u' => r) = (u => r)
 
+What does that mean? Well, for one thing, we can no longer simply
+rearrange the type variables and write a Category instance,
+unless we constrain `u`, `u'`, and `r` to all be the same.
+Even then, will it still follow category laws? Or if we don't constrain
+the upstream/result types, will it follow category-esque laws?
+(What does *that* even mean?) More on this later.
+
 > p1 <+< p2 = FreeT $ do
 >   x1 <- runFreeT p1
 >   let p1' = FreeT $ return x1
@@ -173,8 +209,8 @@ Up until this point, everything is the same.
 >     runFreeT $ pipeCase x2
 
 The await case now has two functions at its disposal,
-the new one `g1` for... well... I feel like I'm beating a dead horse
-explining this every time it comes up.
+the new one `g1` is for handling the possibility that
+the upstream pipe has returned a value.
 
 Now, here was my first impulse for handling the upstream return:
 
@@ -184,17 +220,18 @@ Now, here was my first impulse for handling the upstream return:
 Simple, right? If you have an upstream result, then guess what,
 we have a function that is waiting for that input.
 But here's the problem. g1 came from `p1 :: Pipe i' o u' m r`.
-That means that it has the type `u' -> Pipe i o u' m r`,
-and therefore, when we apply a `u'`, we get a `Pipe i o u' m r`.
+That means that it has the type `u' -> Pipe i' o u' m r`,
+and therefore, when we apply a `u'`, we get a `Pipe i' o u' m r`.
 Well that's a problem, see, because our result type is supposed to be
-`Pipe i o u m r`: that's `u` not `u'`. So what do we do?
+`Pipe i o u m r`: that's `i` and `u` not `i'` and `u'`. So what do we do?
 Well, we could compose it with an exploding bomb to get the correct type:
 
     [haskell]
     {- Return -} (\u' -> g1 u' <+< error "kaboom!")
 
 That's not very nice. We could write in the docs that you should never
-await after you've gotten an upstream result, but that's just gross.
+await after you've gotten an upstream result, but using `error` like this
+is just gross.
 
 How about something more sensible: just compose it with a pipe
 that will return the same upstream result all over again,
@@ -204,7 +241,7 @@ in case you forgot what it was.
 
 Now we can safely say in the docs that once you get an upstream result,
 you will just keep getting that same result every time you await.
-That seems a lot less evil.
+That seems a lot less evil, though still a bit odd.
 
 >     {- Yield  -} (\o next -> f1 o <+< next)
 >     {- Await  -} (\f2 g2  -> wrap $ awaitF (\i -> p1' <+< f2 i)
@@ -323,9 +360,95 @@ we can write combinators that have nontrivial result types!
 Play around in ghci and see for yourself:
 
     [ghci]
-    runPipe $ runP <+< (fromList [1 .. 10] >> return "foo")
+    runPipe $ runP <+< (overwriteResult "foo" $ fromList [1 .. 10])
+      ("foo",[1,2,3,4,5,6,7,8,9,10])
     runPipe $ fold (+) 0 <+< fromList [10, 20, 100]
+      130
     runPipe $ (printer >> return "not hijacked") <+< return "hijacked"
+      "not hijacked"
+
+
+But... is it a Category?
+--------------------------------------------------
+
+Consider what happens if we restrict the upstream and result types
+to be the same type.
+
+    [haskell]
+    newtype PipeC m u i o = PipeC (Pipe i o u m u)
+
+    instance Category (PipeC m u) where
+        id :: PipeC m u i i
+     -- id :: Pipe i i u m u
+        id = PipeC idP
+
+        (.) :: PipeC m u i' o -> PipeC m u i i' -> PipeC m u i o
+     -- (.) :: Pipe i' o u m u -> Pipe i i' u m u -> Pipe i o u m u
+        (PipeC p1) . (PipeC p2) = PipeC (p1 <+< p2)
+
+Notice how the `idP` we wrote already had that restriction!
+However, notice that this restriction throws away
+some of our "newfound power": we can no longer use `runP` or `execP`.
+This raises suspicion about whether `evalP` and `fold` are well-behaved.
+
+Well hold that thought for a second, and consider the following
+pseudo-haskell, where we provide a less restrictive Cateogry instance
+by "bundling" the input with the upstream type, and the output
+with the result type:
+
+    [haskell]
+    newtype PipeC m (i,u) (o,r) = PipeC (Pipe i o u m r)
+
+    instance Category (PipeC m) where
+        id :: PipeC m (i,u) (i,u)
+     -- id :: Pipe i i u m u
+        id = PipeC idP
+
+        (.) :: PipeC m (i',u') (o,r) -> PipeC m (i,u) (i',u') -> PipeC m (i,u) (o,r)
+     -- (.) :: Pipe i' o u' m r -> Pipe i i' u m u' -> Pipe i o u m r
+        (PipeC p1) . (PipeC p2) = PipeC (p1 <+< p2)
+
+Note that, again, `idP` bears the exact restriction given in the type.
+However, this time, `(.)` captures the full meaning of `(<+<)` without
+any superfluous restriction!
+
+But wait, we weren't even sure if the restricted version was a category...
+how will we know if *this* is a category? Or... a category-like... thing,
+since we're bending the rules of Haskell in the first place.
+
+On a huge tangent, "type bundling" in this manner would also allow
+us to express a Category instance for lens families as well.
+
+    [haskell]
+    -- the types look backwards for LensFamily composition
+    -- so we'll just swap them in the first place
+    newtype LensC f (b,b') (a,a') = LensFamily f a a' b b'
+
+    instance Category (LensC f) where
+      id :: LensC f (a,a') (a,a')
+      id = LensC id
+
+      (.) :: LensC f (b,b') (c,c') -> LensC f (a,a') (b,b') -> LensC f (a,a') (c,c')
+      (LensC l1) . (LensC l2) = LensC (l1 . l2)
+
+This really does work out soundly. See for yourself:
+(`cabal install lens-family`)
+
+    [ghci]
+    :m +Lens.Family.Stock
+    newtype LensC f b b' a a' = LensC (LensFamily f a a' b b')
+    let (LensC l1) `lcompose` (LensC l2) = LensC (l1 . l2)
+    :t lcompose
+    :t LensC id
+
+Well back to the point at hand: the answer is I don't know. Do you?
+Perhaps sometime later I'll add an addendum to this blog series
+with a deeper investigation of the Category laws, but for now,
+we're just going to plow ahead, and not promise anything
+about whether or not our Pipe is still a Category.
+I am going to conjecture that it *is*, but nevertheless,
+buyer beware! I dare you to find a counterexample.
+
 
 Next time
 -------------------------------------------------
@@ -340,3 +463,8 @@ to just keep returning that same result, which is sort of weird.
 Next time, we'll explore a new primitive, `abort`, and
 restore the ability for any pipe to abort the entire pipeline.
 
+    [haskell]
+    abort :: Monad m => Pipe i o u m r
+
+You can play with this code for yourself by downloading
+[PipeU.lhs](https://raw.github.com/DanBurton/Blog/master/Literate%20Haskell/Pipes%20to%20Conduits/PipeU.lhs).
