@@ -161,26 +161,27 @@ Running a pipeline
 Adding finalizers to a pipe
 -------------------------------------------------
 
-> cleanupP :: Monad m => m () -> m () -> Pipe i o u m r -> Pipe i o u m r
-> cleanupP abortFinalize returnFinalize = go where
+> cleanupP :: Monad m => m () -> m () -> m () -> Pipe i o u m r
+>          -> Pipe i o u m r
+> cleanupP abortFinalize selfAbortFinalize returnFinalize = go where
 >   go p = FreeT $ do
 >     x <- runFreeT p
 >     runFreeT $ pipeCase x
->     {- Abort  -} (      lift abortFinalize  >> abort)
->     {- Return -} (\r -> lift returnFinalize >> return r)
+>     {- Abort  -} (      lift selfAbortFinalize >> abort)
+>     {- Return -} (\r -> lift returnFinalize    >> return r)
 >     {- Yield  -} (\o finalizeRest next -> wrap $
 >                         yieldF o (finalizeRest >> abortFinalize) (go next))
 >     {- Await  -} (\f g onAbort -> wrap $
 >                         awaitF (go . f) (go . g) (go onAbort))
 
 > finallyP :: Monad m => m () -> Pipe i o u m r -> Pipe i o u m r
-> finallyP finalize = cleanupP finalize finalize
+> finallyP finalize = cleanupP finalize finalize finalize
 > 
 > catchP :: Monad m => m () -> Pipe i o u m r -> Pipe i o u m r
-> catchP finalize = cleanupP finalize pass
+> catchP finalize = cleanupP finalize finalize pass
 > 
 > successP :: Monad m => m () -> Pipe i o u m r -> Pipe i o u m r
-> successP finalize = cleanupP pass finalize
+> successP finalize = cleanupP pass pass finalize
 
 > bracketP :: MonadResource m => IO a -> (a -> IO ()) -> (a -> Pipe i o u m r)
 >          -> Pipe i o u m r
@@ -197,8 +198,8 @@ Adding finalizers to a pipe
 > testPipeL :: Monad m => Pipe Int o () m r -> m (Maybe r)
 > testPipeL p = runPipe $ (await >> await >> abort) <+< take' 1 <+< p <+< fromList [1 ..]
 
-> testPipe :: Monad m => Pipe Int o () m r -> m (Maybe r)
-> testPipe p = runPipe $ evalP <+< p <+< fromList [1..]
+> testPipe :: Monad m => Pipe Int o () m r -> m (Maybe (r, [o]))
+> testPipe p = runPipe $ runP <+< p <+< fromList [1..]
 
 > take' :: Monad m => Int -> Pipe i i u m ()
 > take' 0 = pass
