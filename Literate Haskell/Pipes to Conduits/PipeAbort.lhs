@@ -277,7 +277,7 @@ we can reproduce the good ol' `await` that we had from before:
 >   Left _u -> abort
 >   Right i -> return i
 
-That means that we can resurrect the old stle of pipe programming
+That means that we can resurrect the old style of pipe programming
 right alongside the new style:
 
 > oldPipe :: Monad m => (i -> o) -> Pipe i o u m r
@@ -294,7 +294,7 @@ right alongside the new style:
 
 This code is identical to the code we had from part 1.
 Neat, huh? Notice how these versions of `id`, `filter`, etc,
-do *not* bear the restrition that $u = r$. However,
+do *not* bear the restriction that $u = r$. However,
 they doesn't behave exactly the same as before,
 because `abort` causes the pipeline to fail *without any result*.
 
@@ -312,7 +312,7 @@ We've granted upstream pipes the power to abort downstream pipes
 that await on them, but is this too much power? What if downstream
 doesn't *want* to go down? Next time, we'll up the granularity of control
 once more by allowing downstream pipes to provide a handler for the case
-of an aboted upstream. Once we have that in place, we can start thinking
+of an aborted upstream. Once we have that in place, we can start thinking
 about guaranteed finalizers.
 
 You can play with this code for yourself by downloading
