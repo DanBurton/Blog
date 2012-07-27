@@ -294,9 +294,8 @@ right alongside the new style:
 
 This code is identical to the code we had from part 1.
 Neat, huh? Notice how these versions of `id`, `filter`, etc,
-do *not* bear the restrition that $u = r$.
-
-Note, however, that it doesn't behave exactly the same as before,
+do *not* bear the restrition that $u = r$. However,
+they doesn't behave exactly the same as before,
 because `abort` causes the pipeline to fail *without any result*.
 
     [ghci]
