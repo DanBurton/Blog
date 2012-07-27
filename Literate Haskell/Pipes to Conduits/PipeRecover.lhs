@@ -1,3 +1,16 @@
+Last time, we introduced the `abort` primitive,
+which restored the power to write pipes a la Control.Pipe.
+However, the power for upstream pipes to force
+those downstream to abort is perhaps too much,
+so this time, we're going to give downstream pipes
+the ability to recover from an upstream abort.
+
+The changes made to the code from last time are minimal in this post;
+in fact it barely qualifies as worthy of its own post.
+However, once we've seen the changes there is something important
+that I would like to point out. If you've been following along
+with the series, then you can just skim over most of the code.
+
 > {-# LANGUAGE TypeOperators #-}
 > {-# OPTIONS_GHC -Wall #-}
 > 
@@ -13,7 +26,9 @@
 
 Functors
 --------------------------------------------------
- 
+
+Nothing new here.
+
 > newtype Then next = Then next            -- Identity
 > newtype Yield o next = Yield o           -- Const
 > newtype Await i next = Await (i -> next) -- Fun
@@ -35,6 +50,12 @@ Functors
 The Pipe type
 --------------------------------------------------
 
+We will grant downstream pipes the ability to handle an abort
+in a similar fashion to the way we granted them the ability
+to handle upstream results: by extending our `Await`
+with another callback. This time, there is no input,
+so we simply use the `Then` functor:
+
 > type YieldThen o = Yield o :&: Then
 > type AwaitU i u = Await i :&: Await u :&: Then
 
@@ -48,6 +69,10 @@ The Pipe type
 
 Working with PipeF
 --------------------------------------------------
+
+Little changes in this section.
+We merely enhance `awaitF` to accept the third input,
+and `pipeCase` to similarly handle the extra callback.
 
 > liftYield :: YieldThen o next ->                PipeF i o u next
 > liftYield = L . L
@@ -86,6 +111,19 @@ Working with PipeF
 Pipe primitives
 --------------------------------------------------
 
+`awaitE` is no longer sufficient for our needs,
+we need to extend our `await` primitive yet again.
+Where before we promised `Either u i`, we must now add
+a third possibility: upstream abort. There is no additional
+information associated with this, so let's use a `Maybe`:
+`Nothing` will signal that an `abort` has occurred upstream.
+
+We therefore have 3 choices: `Maybe (Either u i)`,
+`Either (Maybe u) i`, or `Either u (Maybe i)`.
+I like the second choice, because we can preserve `Left`
+as signalling upstream termination, whether that be
+an `abort` or a `return`.
+
 > tryAwait :: Monad m => Pipe i o u m (Either (Maybe u) i)
 > tryAwait = liftF $ awaitF Right (Left . Just) (Left Nothing)
 > 
@@ -98,6 +136,11 @@ Pipe primitives
 
 Pipe composition
 --------------------------------------------------
+
+The changes to pipe composition are minimal:
+when downstream awaits on upstream,
+and upstream aborts, then make use of the
+provided callback.
 
 > (<+<) :: Monad m => Pipe i' o u' m r -> Pipe i i' u m u' -> Pipe i o u m r
 > p1 <+< p2 = FreeT $ do
@@ -129,6 +172,8 @@ Pipe composition
 Running a pipeline
 --------------------------------------------------
 
+When running a pipe, the new callback makes no difference.
+
 > runPipe :: Monad m => Pipeline m r -> m (Maybe r)
 > runPipe p = do
 >   e <- runFreeT p
@@ -145,11 +190,18 @@ Some basic pipes
 > fromList :: Monad m => [o] -> Producer o m ()
 > fromList = mapM_ yield
 
+We can easily write `awaitE` from our last post:
+we simply give up our chance of recovering from an `abort`
+in the `Left Nothing` case.
+
 > awaitE :: Monad m => Pipe i o u m (Either u i)
 > awaitE = tryAwait >>= \emx -> case emx of
 >   Left Nothing  -> abort
 >   Left (Just u) -> return $ Left u
 >   Right i       -> return $ Right i
+
+From there, all of the code from the last post is possible.
+(Skim past if you've seen it already.)
 
 > awaitForever :: Monad m => (i -> Pipe i o u m r) -> Pipe i o u m u
 > awaitForever f = go where
@@ -186,14 +238,11 @@ Some basic pipes
 >     Left _u -> return r
 >     Right i -> go $! f r i
 
-Bringing back the good(?) stuff
--------------------------------------------------
-
 > await :: Monad m => Pipe i o u m i
 > await = awaitE >>= \ex -> case ex of
 >   Left _u -> abort
 >   Right i -> return i
-
+> 
 > oldPipe :: Monad m => (i -> o) -> Pipe i o u m r
 > oldPipe f = forever $ await >>= yield . f
 > 
@@ -206,16 +255,131 @@ Bringing back the good(?) stuff
 > oldPrinter :: Show i => Consumer i u IO r
 > oldPrinter = forever $ await >>= lift . print
 
+Primitives for recovering from an abort
+-------------------------------------------------
+
+We can enhance any pipe by giving it
+new instructions whenever it or its upstream connection aborts.
+
+> recover :: Monad m => Pipe i o u m r -> Pipe i o u m r -> Pipe i o u m r
+> originalP `recover` newP = FreeT $ do
+>   x <- runFreeT originalP
+>   runFreeT $ pipeCase x
+>   {- Abort  -} (newP)
+>   {- Return -} (\r -> return r)
+>   {- Yield  -} (\o next -> wrap $ yieldF o (next `recover` newP))
+>   {- Await  -} (\f g onAbort -> let go p = p `recover` newP in
+>                            wrap $ awaitF (go . f) (go . g) (go onAbort))
+> 
+> recoverWith :: Monad m => Pipe i o u m r -> r -> Pipe i o u m r
+> p `recoverWith` r = p `recover` return r
+
+Here's a little ghci session comparing and contrasting
+uses of "old pipe" programming with recovery with "new pipes".
+
     [ghci]
-    runPipe $ (printer >> return "not hijacked") <+< return "hijacked"
-      Just "not hijacked"
-    runPipe $ (oldPrinter >> return "not hijacked") <+< return "hijacked"
+    let idThen r = oldIdP `recoverWith` r
+    runPipe $ runP <+< idThen 5 <+< fromList [1..3]
+      Just (5,[1,2,3])
+    runPipe $ runP <+< oldIdP <+< fromList [1..3]
       Nothing
+    runPipe $ runP <+< fmap (const 5) oldIdP <+< fromList [1..3]
+      Nothing
+    runPipe $ runP <+< fmap (const 5) idP <+< fromList [1..3]
+      Just (5,[1,2,3])
+
+
+Maybe r versus Abort
+-------------------------------------------------
+
+Now that we've given downstream pipes the ability to
+recover from an upstream abort again, aren't we back
+where we were at two blog posts ago before we ever had `abort`?
+
+Consider back when we didn't have `abort`.
+What if we simply constrained `Pipe` to have a
+result type of `Maybe r`?
+
+    [haskell]
+    type Part2PipeF i o u = YieldThen o :|: AwaitU i u
+    type Part2Pipe i o u  = FreeT (PipeF i o u)
+
+    type Pipe i o u m r = Part2Pipe i o u m (Maybe r)
+
+
+There would be a few consequences.
+
+ * The `awaitE` primitive would produce a `Either (Maybe u) r`
+   instead of `Either u r`.
+ * `runPipe` would have to return a `m (Maybe r)`
+   instead of plain old `m r`.
+ * The pipe that trivially returns `Nothing` could be completely
+   polymorphic, and would be able to fill any hole shaped like a Pipe.
+ * Pipe composition would have to deal with `Maybe`s.
+   It could constantly return an upstream result of `Nothing`
+   after the first time of returning a meaningful result.
+
+These should all sound extremely familiar, because
+they are nearly identical to the code in this very file!
+
+
+What's the point of Abort?
+-------------------------------------------------
+
+Recall that last time, we added `abort` with the motivation
+that we wanted to write pipes the old way like we used to
+with Control.Pipe. By allowing upstream pipes to abort
+the pipeline, we were able to write code using the blissful `await`
+primitive that simply relied on the automatic termination properties
+of pipes.
+
+Notice how Conduit (referring to version 0.5.x) does not provide
+any "untainted" await primitive. The ones it provides are
+
+    [haskell]
+    await :: Pipe l i o u m (Maybe i)
+    awaitE :: Pipe l i o u m (Either u i)
+    awaitForever :: Monad m => (i -> Pipe l i o r m r') -> Pipe l i o r m r
+
+Always await with a caveat. But this allows
+the conduit version of `runPipe` to *not* deal with
+`Maybe`s. It's a tradeoff: where do you want to deal with the possibility
+that a pipe has shut down? If you aren't forced to deal with it
+inside your pipes code, then you are instead forced to deal with it
+at the level of `runPipe`. Or, you can just revert to the oldschool
+Control.Pipe way, and retrieve the result from *whichever* pipe
+in a pipline produces the first result.
+
+What if we want the best of both worlds, and want
+pipe composition without constraining result types to be the same,
+but nevertheless want to provide an *additional* parameter `e`
+that any pipe can abort to, so that `runPipe` is guaranteed
+to have *something* instead of the possibility of `Nothing`.
+Sounds like a job for `Either`!
+
+As you can see, when designing a pipes library,
+there are a lot of potential tradeoffs;
+it's not very black-and-white which ones are the "best"
+ones to choose. We'll just have to keep gaining practical experience
+with and proving properties of the various options.
 
 
 Next time
 -------------------------------------------------
 
+I'll continue from here with `abort` still intact,
+but at the end of the series we will remove it,
+just to show how our end result is identical to conduit.
+
+This time we created the `recover` combinator,
+which affords us some amount of fault tolerance.
+Next time, we'll add proper pipe finalization hooks.
+By combining these with `ResourceT`, we can provide
+convenient, guaranteed, exception-safe resource finalization.
+
+    newtype Finalize m next = Finalize (m ())
+    type YieldThen o m = Yield o :&: Finalize m :&: Then
 
 You can play with this code for yourself by downloading
-[PipeRecover.lhs]().
+[PipeRecover.lhs](https://raw.github.com/DanBurton/Blog/master/Literate%20Haskell/Pipes%20to%20Conduits/PipeRecover.lhs).
+
