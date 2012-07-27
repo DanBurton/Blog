@@ -11,7 +11,7 @@ pipes to shut down the pipeline.
 > {-# LANGUAGE TypeOperators #-}
 > {-# OPTIONS_GHC -Wall #-}
 > 
-> module PipeU where
+> module PipeAbort where
 > 
 > import Control.Monad.Trans.Free (FreeT(..), FreeF(..), liftF, wrap)
 > import Fun ((:&:)(..), (:|:)(..))
@@ -192,6 +192,9 @@ $$\forall p \in Pipe, abort \circ p \equiv abort$$
 
 $$\forall p \in Producer, p \circ abort \equiv p$$
 
+Note that our current `Producer` type is not strong enough
+to actually guarantee this: it only restricts the input type
+to `()`, rather than preventing awaits altogether.
 
 > (>+>) :: Monad m => Pipe i i' u m u' -> Pipe i' o u' m r -> Pipe i o u m r
 > (>+>) = flip (<+<)
@@ -314,4 +317,4 @@ of an aboted upstream. Once we have that in place, we can start thinking
 about guaranteed finalizers.
 
 You can play with this code for yourself by downloading
-[PipeAbort.lhs]().
+[PipeAbort.lhs](https://raw.github.com/DanBurton/Blog/master/Literate%20Haskell/Pipes%20to%20Conduits/PipeAbort.lhs).
