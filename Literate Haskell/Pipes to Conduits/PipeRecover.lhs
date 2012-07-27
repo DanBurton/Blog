@@ -1,7 +1,7 @@
 > {-# LANGUAGE TypeOperators #-}
 > {-# OPTIONS_GHC -Wall #-}
 > 
-> module PipeU where
+> module PipeRecover where
 > 
 > import Control.Monad.Trans.Free (FreeT(..), FreeF(..), liftF, wrap)
 > import Fun ((:&:)(..), (:|:)(..))
