@@ -153,7 +153,13 @@ provided callback.
 >   {- Await  -} (\f1 g1 onAbort1 -> FreeT $ do
 >     x2 <- runFreeT p2
 >     runFreeT $ pipeCase x2
+
+v This is the part that changed
+
 >     {- Abort  -} (        onAbort1 <+< abort) -- downstream recovers
+
+^ This is the part that changed
+
 >     {- Return -} (\u'     -> g1 u' <+< abort) -- downstream recovers
 >     {- Yield  -} (\o next -> f1 o  <+< next)
 >     {- Await  -} (\f2 g2 onAbort2 -> wrap $ awaitF
@@ -260,6 +266,13 @@ Primitives for recovering from an abort
 
 We can enhance any pipe by giving it
 new instructions whenever it or its upstream connection aborts.
+We'll create a new primitive called `recover` to accomplish this.
+Anything that is written with `pipeCase`, or that uses either
+`wrap` or `liftF`, I call a "primitive".
+If it can be written in terms of other primitives,
+without using `pipeCase`, `liftF`, or `wrap` (and obviously
+without digging into a pipe's internals any other way)
+then I don't consider it to be a "primitive".
 
 > recover :: Monad m => Pipe i o u m r -> Pipe i o u m r -> Pipe i o u m r
 > originalP `recover` newP = FreeT $ do
@@ -275,7 +288,7 @@ new instructions whenever it or its upstream connection aborts.
 > p `recoverWith` r = p `recover` return r
 
 Here's a little ghci session comparing and contrasting
-uses of "old pipe" programming with recovery with "new pipes".
+uses of "old pipe" programming and recovery with "new pipes".
 
     [ghci]
     let idThen r = oldIdP `recoverWith` r
@@ -287,6 +300,11 @@ uses of "old pipe" programming with recovery with "new pipes".
       Nothing
     runPipe $ runP <+< fmap (const 5) idP <+< fromList [1..3]
       Just (5,[1,2,3])
+
+Go back and review the implementation of `recover`.
+Do you understand how it works? We'll be doing something very similar
+in the next part of this series in order to add arbitrary finalizers
+to pipes.
 
 
 Maybe r versus Abort
@@ -306,6 +324,9 @@ result type of `Maybe r`?
 
     type Pipe i o u m r = Part2Pipe i o u m (Maybe r)
 
+(Also consider that `MaybeT (Part2Pipe i o u m) r` is isomorphic to
+`Part2Pipe i o u m (Maybe r)`, so the following applies similarly
+to sticking a `MaybeT` on top.)
 
 There would be a few consequences.
 
@@ -356,13 +377,21 @@ but nevertheless want to provide an *additional* parameter `e`
 that any pipe can abort to, so that `runPipe` is guaranteed
 to have *something* instead of the possibility of `Nothing`.
 Sounds like a job for `Either`!
+Paolo, in his `pipes-core` fork of `pipes`,
+provides an `EitherT e` on top of (essentially) `Part2Pipe`,
+but with the additional constraint that `e` be the same as `u`!
 
 As you can see, when designing a pipes library,
 there are a lot of potential trade-offs;
 it's not very black-and-white which ones are the "best"
 ones to choose. We'll just have to keep gaining practical experience
 with and proving properties of the various options.
-
+Keep an eye on `pipes` and `pipes-core`, because it seems that
+Paolo and Gabriel are starting to agree more than usual!
+`conduit` has undergone massive changes since its inception around
+8 months ago (while nevertheless surprisingly retaining much of the same API);
+I wouldn't be surprised to see these three packages
+merge into one within the next year or two.
 
 Next time
 -------------------------------------------------
@@ -370,6 +399,7 @@ Next time
 I'll continue from here with `abort` still intact,
 but at the end of the series we will remove it,
 just to show how our end result is identical to conduit.
+At least I think it will be. We'll see when we get there.
 
 This time we created the `recover` combinator,
 which affords us some amount of fault tolerance.
