@@ -1,8 +1,8 @@
 Last time, we introduced the `abort` primitive,
 which restored the power to write pipes a la Control.Pipe.
 However, the power for upstream pipes to force
-those downstream to abort is perhaps too much,
-so this time, we're going to give downstream pipes
+those downstream to abort is perhaps too much.
+This time, we're going to give downstream pipes
 the ability to recover from an upstream abort.
 
 The changes made to the code from last time are minimal in this post;
@@ -301,10 +301,13 @@ uses of "old pipe" programming and recovery with "new pipes".
     runPipe $ runP <+< fmap (const 5) idP <+< fromList [1..3]
       Just (5,[1,2,3])
 
+Next time, We'll be doing something very similar to this,
+in order to add arbitrary finalizers to pipes.
 Go back and review the implementation of `recover`.
-Do you understand how it works? We'll be doing something very similar
-in the next part of this series in order to add arbitrary finalizers
-to pipes.
+Do you understand how it works?
+Could we have written `recover` using the code from last time?
+How does this version of `recover` make use of the change we made
+to the `PipeF` functor?
 
 
 Maybe r versus Abort
@@ -332,10 +335,10 @@ There would be a few consequences.
 
  * The `awaitE` primitive would produce a `Either (Maybe u) r`
    instead of `Either u r`.
- * `runPipe` would have to return a `m (Maybe r)`
+ * `runPipe` would produce `m (Maybe r)`
    instead of plain old `m r`.
- * The pipe that trivially returns `Nothing` could be completely
-   polymorphic, and would be able to fill any hole shaped like a Pipe.
+ * The pipe that trivially returns `Nothing` could be completely polymorphic,
+   and would be able to fill any hole shaped like a Pipe.
  * Pipe composition would have to deal with `Maybe`s.
    It could constantly return an upstream result of `Nothing`
    after the first time of returning a meaningful result.
