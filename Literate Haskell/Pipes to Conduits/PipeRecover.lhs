@@ -121,7 +121,7 @@ information associated with this, so let's use a `Maybe`:
 We therefore have 3 choices: `Maybe (Either u i)`,
 `Either (Maybe u) i`, or `Either u (Maybe i)`.
 I like the second choice, because we can preserve `Left`
-as signalling upstream termination, whether that be
+as signaling upstream termination, whether that be
 an `abort` or a `return`.
 
 > tryAwait :: Monad m => Pipe i o u m (Either (Maybe u) i)
@@ -343,12 +343,12 @@ any "untainted" await primitive. The ones it provides are
 
 Always await with a caveat. But this allows
 the conduit version of `runPipe` to *not* deal with
-`Maybe`s. It's a tradeoff: where do you want to deal with the possibility
+`Maybe`s. It's a trade-off: where do you want to deal with the possibility
 that a pipe has shut down? If you aren't forced to deal with it
 inside your pipes code, then you are instead forced to deal with it
-at the level of `runPipe`. Or, you can just revert to the oldschool
+at the level of `runPipe`. Or, you can just revert to the old-school
 Control.Pipe way, and retrieve the result from *whichever* pipe
-in a pipline produces the first result.
+in a pipeline produces the first result.
 
 What if we want the best of both worlds, and want
 pipe composition without constraining result types to be the same,
@@ -358,7 +358,7 @@ to have *something* instead of the possibility of `Nothing`.
 Sounds like a job for `Either`!
 
 As you can see, when designing a pipes library,
-there are a lot of potential tradeoffs;
+there are a lot of potential trade-offs;
 it's not very black-and-white which ones are the "best"
 ones to choose. We'll just have to keep gaining practical experience
 with and proving properties of the various options.
