@@ -1,4 +1,4 @@
-Last time, we enhanced the `abort` primitive,
+Last time, we enhanced the `await` primitive,
 making it aware of when the upstream pipe returned a value.
 However, the change forced us to modify
 our style of programming. This is not necessarily
@@ -23,13 +23,13 @@ pipes to shut down the pipeline.
 
 Functors
 --------------------------------------------------
- 
+
 We finally revisit our fourth old friend,
 the Empty functor, and give it the name `Abort`.
 Recall that the Empty functor allows us
 to short circuit computation without
 providing any other information.
- 
+
 > newtype Then next = Then next            -- Identity
 > newtype Yield o next = Yield o           -- Const
 > newtype Await i next = Await (i -> next) -- Fun
