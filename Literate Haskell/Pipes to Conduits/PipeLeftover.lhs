@@ -1,3 +1,13 @@
+One important use case of the Conduit library
+is parsing. In order to perform useful parsing,
+we need to be able to occasionally consume "too much"
+input, and then put the "leftovers" back into the
+input stream, as if they had never been consumed.
+
+Today, we will extend the `Pipe` type yet again,
+creating a new primitive, `leftover`,
+comparable to that of Data.Conduit.
+
 > {-# LANGUAGE TypeOperators #-}
 > {-# OPTIONS_GHC -Wall #-}
 > 
@@ -10,12 +20,13 @@
 > import Control.Monad (when, forever)
 > import Control.Monad.Trans.Class (lift)
 > import Control.Monad.Trans.Resource (MonadResource, allocate, release)
-> 
-> import qualified Data.Sequence as Seq
-> import Data.Sequence ((|>), ViewL(..))
+
 
 Functors
 --------------------------------------------------
+ 
+We'll create yet another synonym for Const,
+this time called `Leftover`.
  
 > newtype Then next = Then next            -- Identity
 > newtype Yield o next = Yield o           -- Const
@@ -52,11 +63,21 @@ Functors
 The Pipe type
 --------------------------------------------------
 
+The usage of `leftover` will be much like that of `yield`,
+we supply a value, and then carry on with our computation.
+We will therefore bundle `Leftover` with `Then`,
+as we did with `YieldThen`.
+
 > type LeftoverThen l = Leftover l :&: Then
 > type YieldThen o m  = Yield o :&: Finalize m :&: Then
 > type AwaitU i u     = Await i :&: Await u :&: Then
 
-> type PipeF l i o u m = YieldThen o m :|: AwaitU i u :|: Abort :|: LeftoverThen l
+PipeF and Pipe will acquire a new type parameter `l`
+which indicates the type of leftovers that a given pipe
+will supply.
+
+> type PipeF l i o u m =  YieldThen o m :|: AwaitU i u
+>                     :|: Abort         :|: LeftoverThen l
 > type Pipe l i o u m r = FreeT (PipeF l i o u m) m r
 > 
 > type Producer   o   m r = Pipe Void () o    () m r
@@ -66,6 +87,10 @@ The Pipe type
 
 Working with PipeF
 --------------------------------------------------
+
+Our lifting functions will be adjusted as usual:
+the pre-existing ones acquire another `L`,
+while the new one gets an `R`.
 
 > liftYield :: YieldThen o m next ->              PipeF l i o u m next
 > liftYield = L . L . L
@@ -79,6 +104,8 @@ Working with PipeF
 > liftLeftover :: LeftoverThen l next ->          PipeF l i o u m next
 > liftLeftover = R
 
+We add a smart constructor `leftoverF` in similar fashion
+to the ones we have already.
 
 > yieldF :: o -> m () -> next ->                  PipeF l i o u m next
 > yieldF o m next = liftYield $ Yield o :&: Finalize m :&: Then next
@@ -91,6 +118,8 @@ Working with PipeF
 > 
 > leftoverF :: l -> next ->                       PipeF l i o u m next
 > leftoverF l next = liftLeftover $ Leftover l :&: Then next
+
+And finally we add another branch to `pipeCase`.
 
 > pipeCase :: FreeF (PipeF l i o u m) r next
 >  ->                                        a  -- Abort
@@ -114,6 +143,9 @@ Working with PipeF
 Pipe primitives
 --------------------------------------------------
 
+Now that we're old pros with `liftF`,
+the `leftover` primitive is a breeze.
+
 > tryAwait :: Monad m =>      Pipe l i o u m (Either (Maybe u) i)
 > tryAwait = liftF $ awaitF Right (Left . Just) (Left Nothing)
 > 
@@ -126,13 +158,102 @@ Pipe primitives
 > leftover :: Monad m => l -> Pipe l i o u m ()
 > leftover l = liftF $ leftoverF l ()
 
+
+Getting rid of leftovers
+-------------------------------------------------
+
+Being able to specify leftovers is one thing,
+but how do we interpret that? What does it *mean* when a pipe
+supplies leftovers? The "obvious" meaning is that
+the rest of the pipe computation should have that leftover value
+available to it the next time it awaits.
+
+Let's write an interpreter that will "inject" leftovers
+into a pipe, making them available to the pipe's own `await`s.
+The input pipe must therefore bear the restriction that
+the leftover type is the same as the input type.
+The resultant pipe will contain no `leftover` constructs,
+and so it can therefore be polymorphic in that type parameter.
+
+The situation might arise where two leftovers are supplied in a row.
+What should we do then? Discard the old and keep the new?
+If we keep both, then which order should they be supplied back
+to the subsequent `await`s?
+
+Recall that `Pipe`s are a form of stream processing.
+Suppose we represent the stream as a queue. `await` and `yield`
+are like the operations `dequeue` (taking from the front of a queue)
+and `enqueue` (adding to the back of a queue) respectively.
+The idea of "leftovers" is that we accidentally took "too much",
+and we want to reverse our actions. The logical conclusion, therefore,
+is that the `leftover` operation should "push" a value
+back onto the *front* of the queue.
+
+> injectLeftovers :: Monad m => Pipe i i o u m r -> Pipe l i o u m r
+> injectLeftovers = go [] where
+
+Our "queue" is going to be represented by a list.
+An empty list means "please refer to the actual stream".
+A nonempty list means "I have these values that I took from the stream;
+please pretend like they're still there."
+
+>   go ls p = FreeT $ do
+>     x <- runFreeT p
+>     runFreeT $ pipeCase x
+>     {- Abort  -} (abort)
+>     {- Return -} (\r -> return r)
+>     {- L-over -} (\l next -> go (l:ls) next)
+
+When we encounter a `leftover` statement,
+we have yet another value we took from the stream,
+and we'd like to "put it back". We therefore cons it onto the front.
+
+>     {- Yield  -} (\o fin next -> wrap $ yieldF o fin (go ls next))
+>     {- Await  -} (\f g onAbort -> case ls of
+>       [] -> wrap $ awaitF (go [] . f) (go [] . g) (go [] onAbort)
+>       l : ls' -> go ls' (f l))
+
+When we encounter an `await`, there are two possibilities:
+either we have an empty list, and we need to refer to the actual stream,
+or we have a nonempty list, and we can just take the top value.
+"Referring to the actual stream" translates to creating another `await` construct,
+while "just taking the top value" translates to invoking the `f` callback
+with the `l` value.
+
 Pipe composition
 --------------------------------------------------
+
+The question arises: how are we supposed to compose
+two pipes that both might supply leftovers?
+There are a few possibilities.
+
+If we allow them both to supply leftovers, then
+should we discard the leftovers from one pipe or the other?
+Perhaps the resultant pipe could simply have an `Either` union
+of the two types of leftovers.
+
+The other option is to disallow leftovers from one or both
+pipes upon composing them. If we disallow leftovers from one pipe,
+then the resultant pipe will have the leftover type of the other one.
+If we disallow leftovers from both pipes, then there is no way
+for their composition to produce leftovers.
+
+Given the nature of `injectLeftovers`, which associates leftovers
+with the "input" type `i`, and given that the resultant input type `i`
+comes from the upstream pipe, the logical choice seems to be
+to allow leftovers from the upstream pipe, but not the downstream pipe.
+We "disallow" leftovers by specifying that the type of leftovers
+for the downstream pipe is `Void`. It is impossible to construct
+a value of type `Void`, unless it is an infinite loop or an exception.
 
 > (<+<) :: Monad m => Pipe Void i' o u' m r -> Pipe l i i' u m u' -> Pipe l i o u m r
 > p1 <+< p2 = composeWithFinalizer pass p1 p2
 
+> (<?<) :: Monad m => Pipe Void i' o u' m r -> Pipe l i i' u m u' -> Pipe l i o u m r
+> p1 <?< p2 = composeWithFinalizer unreachable p1 p2
 
+All we have to change in pipe composition is
+to add branches for `leftover` whenever we `pipeCase`.
 
 > composeWithFinalizer :: Monad m => m ()
 >                  -> Pipe Void i' o u' m r -> Pipe l i i' u m u' -> Pipe l i o u m r
@@ -143,6 +264,10 @@ Pipe composition
 >   {- Abort  -} (      lift finalizeUpstream >> abort)
 >   {- Return -} (\r -> lift finalizeUpstream >> return r)
 >   {- L-over -} (\l _next -> absurd l)
+
+Since the downstream pipe has a leftover type of `Void`,
+we can use `absurd` to assert that this branch should never happen.
+
 >   {- Yield  -} (\o finalizeDownstream next ->
 >                       let (<*<) = composeWithFinalizer finalizeUpstream
 >                       in wrap $ yieldF o
@@ -153,17 +278,25 @@ Pipe composition
 >     runFreeT $ pipeCase x2
 >     {- Abort  -} (    onAbort1 <+< abort) -- downstream recovers
 >     {- Return -} (\u' -> g1 u' <+< abort) -- downstream recovers
->     {- L-over -} (\l next -> let (<*<) = composeWithFinalizer unreachable
->                              in wrap $ leftoverF l (p1' <*< next))
+>     {- L-over -} (\l next -> wrap $ leftoverF l (p1' <?< next))
+
+If the upstream pipe produced a leftover, then we'll keep it.
+Since upstream still has control, there is no reason to expect
+that the finalizer we provide to pipe composition will be used,
+so we'll use the `unreachable` one.
+Note that the types make no guarantees about `unreachable`,
+rather, it is my own assertion. I arrived at the conclusion
+that the provided finalizer for this location would be unreachable
+by reasoning about the code, but I see no way to encode
+or enforce this it in the type system.
+
 >     {- Yield  -} (\o newFinalizer next ->
 >                       let (<*<) = composeWithFinalizer newFinalizer
 >                       in f1 o <*< next)
->     {- Await  -} (\f2 g2 onAbort2 ->
->                       let (<*<) = composeWithFinalizer unreachable
->                       in wrap $ awaitF
->                           (\i -> p1' <*< f2 i)
->                           (\u -> p1' <*< g2 u)
->                           (      p1' <*< onAbort2)))
+>     {- Await  -} (\f2 g2 onAbort2 -> wrap $ awaitF
+>                           (\i -> p1' <?< f2 i)
+>                           (\u -> p1' <?< g2 u)
+>                           (      p1' <?< onAbort2)))
 
 
 > (>+>) :: Monad m => Pipe l i i' u m u' -> Pipe Void i' o u' m r -> Pipe l i o u m r
@@ -176,6 +309,11 @@ Pipe composition
 Running a pipeline
 --------------------------------------------------
 
+Given that a pipeline cannot reasonably use
+`yield` or `leftover`, since those types are constrained to `Void`,
+let's again make use of `absurd` to discharge us
+of the obligation to provide code for those branches.
+
 > runPipe :: Monad m => Pipeline m r -> m (Maybe r)
 > runPipe p = do
 >   e <- runFreeT p
@@ -186,22 +324,58 @@ Running a pipeline
 >   {- Yield  -} (\o _fin _next  -> absurd o)
 >   {- Await  -} (\f _g _onAbort -> runPipe $ f ())
 
-
-Getting rid of leftovers
+Play time
 -------------------------------------------------
 
-> injectLeftovers :: Monad m => Pipe i i o u m r -> Pipe l i o u m r
-> injectLeftovers = go Seq.empty where
->   go ls p = FreeT $ do
->     x <- runFreeT p
->     runFreeT $ pipeCase x
->     {- Abort  -} (abort)
->     {- Return -} (\r -> return r)
->     {- L-over -} (\l next -> go (ls |> l) next)
->     {- Yield  -} (\o fin next -> wrap $ yieldF o fin (go ls next))
->     {- Await  -} (\f g onAbort -> case Seq.viewl ls of
->       EmptyL -> wrap $ awaitF (go ls . f) (go ls . g) (go ls onAbort)
->       l :< ls' -> go ls' (f l))
+Let's give leftovers a spin!
+
+    [ghci]
+    :set -XNoMonomorphismRestriction
+    let p = leftover "hello" >> leftover "world" >> idP
+    runPipe $ execP <+< injectLeftovers p <+< fromList ["the", "end"]
+      Just ["world","hello","the","end"]
+
+Note that this is a horrible abuse of `leftover`.
+The concept of leftovers is that they are made as a way for you
+to put back onto the stream that which you have taken off.
+
+Here's perhaps a more sensible use of `leftover`:
+FORTH-style programming!
+
+> swap :: Monad m => Pipe i i o u m ()
+> swap = do 
+>   i1 <- await
+>   i2 <- await
+>   leftover i1
+>   leftover i2
+
+> dup :: Monad m => Pipe i i o u m ()
+> dup = do
+>   i <- await
+>   leftover i
+>   leftover i
+
+    [ghci]
+    :set -XNoMonomorphismRestriction
+    let p = injectLeftovers (swap >> dup >> idP)
+    runPipe $ execP <+< p <+< fromList [1 .. 5]
+      Just [2,2,1,3,4,5]
+
+Perhaps the simplest use of leftovers is the ability
+to "peek" at the value coming next without consuming it.
+
+> peekE :: Monad m => Pipe i i o u m (Either u i)
+> peekE = awaitE >>= \ex -> case ex of
+>   Left u  -> return (Left u)
+>   Right i -> leftover i >> return (Right i)
+
+
+
+Next time
+-------------------------------------------------
+
+TODO
+
 
 Adding finalizers to a pipe
 -------------------------------------------------
@@ -235,21 +409,6 @@ Adding finalizers to a pipe
 >   (key, val) <- lift $ allocate create destroy 
 >   finallyP (release key) (mkPipe val)
 
-> idMsg :: String -> Pipe l i i u IO u
-> idMsg str = finallyP (putStrLn str) idP
-
-> testPipeR :: Monad m => Pipe Void i o u m r -> m (Maybe r)
-> testPipeR p = runPipe $ (await >> abort) <+< p <+< abort
-
-> testPipeL :: Monad m => Pipe Void Int o () m r -> m (Maybe r)
-> testPipeL p = runPipe $ (await >> await >> abort) <+< take' 1 <+< p <+< fromList [1 ..]
-
-> testPipe :: Monad m => Pipe Void Int o () m r -> m (Maybe (r, [o]))
-> testPipe p = runPipe $ runP <+< p <+< fromList [1..]
-
-> take' :: Monad m => Int -> Pipe l i i u m ()
-> take' 0 = pass
-> take' n = (await >>= yield) >> take' (pred n)
 
 Some basic pipes
 -------------------------------------------------
@@ -317,15 +476,6 @@ Bringing back the good(?) stuff
 > 
 > oldPrinter :: Show i => Consumer l i u IO r
 > oldPrinter = forever $ await >>= lift . print
-
-    [ghci]
-    :set -XNoMonomorphismRestriction
-    let p = leftover "hello" >> leftover "world" >> idP
-    runPipe $ execP <+< injectLeftovers p <+< fromList ["the", "end"]
-      Just ["hello","world","the","end"]
-
-Next time
--------------------------------------------------
 
 
 You can play with this code for yourself by downloading
