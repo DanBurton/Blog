@@ -253,7 +253,7 @@ If it `abort`s or `return`s, then it will have finalized itself.
 If it `yield`s, then it will supply a brand new finalizer.
 
 So the question is, when we re-compose `p1` with either `f2 i`,
-`g2 i`, or `onAbort2`, what finalizer should we use?
+`g2 u`, or `onAbort2`, what finalizer should we use?
 From what I just said in the previous paragraph, it should be apparent that
 no matter what finalizer we provide here, it will *never be used*.
 So we'll just hand it the exploding bomb: `unreachable`.
