@@ -7,7 +7,7 @@ Today, we'll look at a different aspect of pipe termination:
 finalizers. As we have discussed before, downstream pipes
 may discard upstream pipes when they are done with them,
 whether the upstream pipe has returned a result or not.
-That pipe may have unfinished business, for example,
+That pipe may have unfinished business: for example,
 open file handles or database connections that need to be closed.
 We'd like to be able to dictate arbitrary actions
 which will always be performed before a pipe is discarded.
@@ -77,12 +77,22 @@ We will attach the `Finalize` information to the
 downstream, and downstream decides to discard upstream,
 downstream can use the latest finalizer it acquired from upstream.
 
+That was a lot of up and down so reread that sentence a few times
+until it becomes clear. It sounds childish, but I find these things
+tend to make more sense when I wave my hand left when I read "downstream"
+and right when I read "upstream". It's also more fun when you add
+other gestures for verbs.
+
 > type YieldThen o m = Yield o :&: Finalize m :&: Then
 > type AwaitU i u    = Await i :&: Await u :&: Then
 
 > type PipeF i o u m = YieldThen o m :|: AwaitU i u :|: Abort
 > type Pipe i o u m r = FreeT (PipeF i o u m) m r
-> 
+
+Pay special attention to how `Pipe` is defined here.
+It makes sure that `m` is the same `m` given to both the `PipeF` functor
+*and* to `FreeT`. See if you can explain why this is significant.
+
 > type Producer o   m r = Pipe () o    () m r
 > type Consumer i u m r = Pipe i  Void u  m r
 > type Pipeline     m r = Pipe () Void () m r
@@ -90,6 +100,9 @@ downstream can use the latest finalizer it acquired from upstream.
 
 Working with PipeF
 --------------------------------------------------
+
+The `yieldF` smart constructor is extended appropriately,
+as is `pipeCase`.
 
 > liftYield :: YieldThen o m next ->              PipeF i o u m next
 > liftYield = L . L
@@ -108,9 +121,6 @@ Working with PipeF
 > 
 > abortF :: PipeF i o u m next
 > abortF = liftAbort Abort
-
-The `yieldF` smart constructor is extended appropriately,
-as is `pipeCase`.
 
 > pipeCase :: FreeF (PipeF i o u m) r next
 >  ->                                        a  -- Abort
@@ -156,6 +166,9 @@ supplying it the empty finalizer, `pass`.
 > (<+<) :: Monad m => Pipe i' o u' m r -> Pipe i i' u m u' -> Pipe i o u m r
 > p1 <+< p2 = composeWithFinalizer pass p1 p2
 
+It will also be convenient to define composition using the
+unreachable finalizer. You'll see why momentarily.
+
 > (<?<) :: Monad m => Pipe i' o u' m r -> Pipe i i' u m u' -> Pipe i o u m r
 > p1 <?< p2 = composeWithFinalizer unreachable p1 p2
 
@@ -172,6 +185,8 @@ To maintain *some* similarity with previous code,
 whenever we need to invoke `composeWithFinalizer` recursively,
 we'll let-bind a new operator `(<*<)`, which will have some particular
 finalizer baked in: which one depends on each situation as we will soon see.
+(Recall that we also have `<+<` and `<?<` at our disposal,
+which have `pass` and `unreachable` finalizers baked in, respectively.)
 
 >   {- Abort  -} (      lift finalizeUpstream >> abort)
 >   {- Return -} (\r -> lift finalizeUpstream >> return r)
@@ -179,7 +194,7 @@ finalizer baked in: which one depends on each situation as we will soon see.
 Upon reaching a downstream `abort` or `return`,
 we are going to discard the upstream pipe, so we must run
 the finalizer. Since `Pipe` is an instance of `MonadTrans`
-by virtue of being a synonym for a `FreeT`, we can simply `lift`
+(by virtue of being a synonym for a `FreeT`), we can simply `lift`
 the finalizer into a pipe, and then sequence it (`>>`) with
 the appropriate result.
 
@@ -253,6 +268,7 @@ Phew, we made it through again. Finalization is tricky:
 each case requires careful thought and analysis in order to make sure
 you are doing the right thing. But did we really do the right thing
 by using `unreachable`? Are you sure? Review the code, and think about it.
+Why did we use `<+<` for upstream Return and Abort cases instead of `<?<`?
 
 
 Running a pipeline
@@ -353,45 +369,88 @@ finalizers, even in the face of thrown exceptions.
 We can make good use of this by `lift`ing `allocate` into a Pipe,
 and then adding the corresponding `release` as a finalizer!
 
-Trying out our new finalization combinators
--------------------------------------------------
-
-TODO: 
-
-> idMsg :: String -> Pipe i i u IO u
-> idMsg str = finallyP (putStrLn str) idP
-> 
-> take' :: Monad m => Int -> Pipe i i u m ()
-> take' 0 = pass
-> take' n = (await >>= yield) >> take' (pred n)
-> 
-> testPipeR :: Monad m => Pipe i o u m r -> m (Maybe r)
-> testPipeR p = runPipe $ (await >> abort) <+< p <+< abort
-> 
-> testPipeL :: Monad m => Pipe Int o () m r -> m (Maybe r)
-> testPipeL p = runPipe $ (await >> await >> abort) <+< take' 1 <+< p <+< fromList [1 ..]
-> 
-> testPipe :: Monad m => Pipe Int o () m r -> m (Maybe (r, [o]))
-> testPipe p = runPipe $ runP <+< p <+< fromList [1..]
-
-TODO: A ghci session.
 
 How do we know which finalizer comes first?
 -------------------------------------------------
 
-TODO: prose
+I've defined a few quick-n-dirty functions here to help us observe
+the behavior of pipe finalization.
 
+> idMsg :: String -> Pipe i i u IO u
+> idMsg str = finallyP (putStr $ str ++ " ") idP
+> 
+> take' :: Monad m => Int -> Pipe i i u m ()
+> take' 0 = pass
+> take' n = (await >>= yield) >> take' (pred n)
+
+`testPipeR` will test what happens when `abort` comes from upstream.
+
+> testPipeR :: Monad m => Pipe i o u m r -> m (Maybe r)
+> testPipeR p = runPipe $ (await >> abort) <+< p <+< abort
+
+`testPipeL` will test what happens when `abort` comes from downstream.
+
+> testPipeL :: Monad m => Pipe Int o () m r -> m (Maybe r)
+> testPipeL p = runPipe $ (await >> await >> abort) <+< take' 1 <+< p <+< fromList [1 ..]
+
+`testPipe` will test what happens when `abort` comes from within the pipe itself.
+
+> testPipe :: Monad m => Pipe Int o () m r -> m (Maybe (r, [o]))
+> testPipe p = runPipe $ runP <+< p <+< fromList [1..]
+
+> examplePipe :: Pipe Int Int u IO ()
+> examplePipe = idMsg "one" <+< take' 5 <+< idMsg "two" <+< idMsg "three"
+
+Let's take this for a spin.
+
+    [ghci]
+    testPipeR examplePipe
+      three two one Nothing
+    testPipeL examplePipe
+      three two one Nothing
+    testPipe examplePipe
+      three two one Just ((),[1,2,3,4,5])
+
+Well that's boring. In each case the finalizers run in order
+from upstream to downstream: "three two one".
+But it's boring on purpose: the way that I have defined
+for finalizers to behave is that if you are a pipe,
+and *your* finalizer is running, you can safely assume
+that any pipes *upstream* of you have already been finalized.
+
+I encourage you to
+[download this code](https://raw.github.com/DanBurton/Blog/master/Literate%20Haskell/Pipes%20to%20Conduits/PipeFinalize.lhs)
+, and mess with it (requires
+[Fun.lhs](https://raw.github.com/DanBurton/Blog/master/Literate%20Haskell/Pipes%20to%20Conduits/Fun.lhs)
+as well, tested on GHC 7.4.1).
+What happens when you switch the order of finalizers
+on line 204 (pipe composition)? What happens when you switch
+the order of finalizers on line 317 (cleanupP)?
+What if you switch both? Can you think of any circumstances
+when you'd want a pipe's finalizer to run *before* pipes upstream of it
+are finalized? You can use this command to run the ghci examples
+and see the difference between the expected output and the actual output:
+
+    $ BlogLiterately -g PipeFinalize.lhs > test.html && firefox test.html
 
 Next time
 -------------------------------------------------
 
-TODO: prose. Next time: Leftovers!
+The subtleties of finalization provide us a lot to think about.
+There is again room for many possible implementations, but logic
+and seeking consistent behavior can help us narrow the possibilities,
+and Haskell's type system often guides us to the "obvious" solution.
+
+Next time, we'll tackle the "leftovers" feature, using the same style
+as `conduit`. I'll try to point out all of the areas where different
+implementations are possible, because I feel that the decisions are
+less clear for leftovers than for previous features.
 
 
 Some basic pipes
 -------------------------------------------------
 
-Here's all of those pipes from previous posts/
+Here's all of those pipes from previous posts.
 They remain unchanged: you can ignore the new finalizer
 capability that we added and go right along writing pipes
 just like you did before we added this feature.
