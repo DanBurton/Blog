@@ -156,6 +156,9 @@ supplying it the empty finalizer, `pass`.
 > (<+<) :: Monad m => Pipe i' o u' m r -> Pipe i i' u m u' -> Pipe i o u m r
 > p1 <+< p2 = composeWithFinalizer pass p1 p2
 
+> (<?<) :: Monad m => Pipe i' o u' m r -> Pipe i i' u m u' -> Pipe i o u m r
+> p1 <?< p2 = composeWithFinalizer unreachable p1 p2
+
 > composeWithFinalizer :: Monad m => m ()
 >                  -> Pipe i' o u' m r -> Pipe i i' u m u' -> Pipe i o u m r
 > composeWithFinalizer finalizeUpstream p1 p2 = FreeT $ do
@@ -221,12 +224,10 @@ If downstream is `await`ing, and upstream is `yield`ing,
 then that means the upstream pipe has provided a `newFinalizer`
 to use instead of the old one.
 
->     {- Await  -} (\f2 g2 onAbort2 ->
->                       let (<*<) = composeWithFinalizer unreachable
->                       in wrap $ awaitF
->                           (\i -> p1' <*< f2 i)
->                           (\u -> p1' <*< g2 u)
->                           (      p1' <*< onAbort2)))
+>     {- Await  -} (\f2 g2 onAbort2 -> wrap $ awaitF
+>                           (\i -> p1' <?< f2 i)
+>                           (\u -> p1' <?< g2 u)
+>                           (      p1' <?< onAbort2)))
 
 When both `p1` and `p2` are awaiting, well *that* is an interesting case.
 Consider: `p2` is transferring control *further* upstream. When
@@ -390,7 +391,10 @@ TODO: prose. Next time: Leftovers!
 Some basic pipes
 -------------------------------------------------
 
-TODO: dismiss.
+Here's all of those pipes from previous posts/
+They remain unchanged: you can ignore the new finalizer
+capability that we added and go right along writing pipes
+just like you did before we added this feature.
 
 > fromList :: Monad m => [o] -> Producer o m ()
 > fromList = mapM_ yield
