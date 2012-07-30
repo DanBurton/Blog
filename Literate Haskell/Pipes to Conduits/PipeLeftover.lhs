@@ -170,7 +170,7 @@ available to it the next time it awaits.
 
 Let's write an interpreter that will "inject" leftovers
 into a pipe, making them available to the pipe's own `await`s.
-The input pipe must therefore bear the restriction that
+The given pipe must therefore bear the restriction that
 the leftover type is the same as the input type.
 The resultant pipe will contain no `leftover` constructs,
 and so it can therefore be polymorphic in that type parameter.
@@ -287,7 +287,7 @@ so we'll use the `unreachable` one.
 Note that the types make no guarantees about `unreachable`,
 rather, it is my own assertion. I arrived at the conclusion
 that the provided finalizer for this location would be unreachable
-by reasoning about the code, but I see no way to encode
+by reasoning about the code, but I see no convenient way to encode
 or enforce this it in the type system.
 
 >     {- Yield  -} (\o newFinalizer next ->
@@ -323,6 +323,30 @@ of the obligation to provide code for those branches.
 >   {- L-over -} (\l _next       -> absurd l)
 >   {- Yield  -} (\o _fin _next  -> absurd o)
 >   {- Await  -} (\f _g _onAbort -> runPipe $ f ())
+
+
+Adding finalizers to a pipe
+-------------------------------------------------
+
+There is little to say about the changes here.
+The `leftover` construct promises that there is is
+a `next` pipe, so we simply attach the cleanup actions
+to that next pipe, and that's it.
+
+> cleanupP :: Monad m => m () -> m () -> m () -> Pipe l i o u m r
+>          -> Pipe l i o u m r
+> cleanupP abortFinalize selfAbortFinalize returnFinalize = go where
+>   go p = FreeT $ do
+>     x <- runFreeT p
+>     runFreeT $ pipeCase x
+>     {- Abort  -} (      lift selfAbortFinalize >> abort)
+>     {- Return -} (\r -> lift returnFinalize    >> return r)
+>     {- L-over -} (\l next -> wrap $ leftoverF l (go next))
+>     {- Yield  -} (\o finalizeRest next -> wrap $
+>                         yieldF o (finalizeRest >> abortFinalize) (go next))
+>     {- Await  -} (\f g onAbort -> wrap $
+>                         awaitF (go . f) (go . g) (go onAbort))
+
 
 Play time
 -------------------------------------------------
@@ -374,25 +398,18 @@ to "peek" at the value coming next without consuming it.
 Next time
 -------------------------------------------------
 
-TODO
+I initially planned for the series to end right around here,
+but I have decided to extend it to touch on two more topics.
+Next time, we will extend our Pipe type with a new primitive, `close`,
+allowing it to signal that it is finished consuming input, so that upstream
+finalizers can be run as soon as possible.
+After that, we'll take away `close` and `abort`, and compare
+the result to Data.Conduit, which has neither of those two features.
+Whether that is a "good" or "bad" thing is up for you to decide,
+but I'll try to point out a few of the trade-offs.
 
-
-Adding finalizers to a pipe
+Convenience combinators
 -------------------------------------------------
-
-> cleanupP :: Monad m => m () -> m () -> m () -> Pipe l i o u m r
->          -> Pipe l i o u m r
-> cleanupP abortFinalize selfAbortFinalize returnFinalize = go where
->   go p = FreeT $ do
->     x <- runFreeT p
->     runFreeT $ pipeCase x
->     {- Abort  -} (      lift selfAbortFinalize >> abort)
->     {- Return -} (\r -> lift returnFinalize    >> return r)
->     {- L-over -} (\l next -> wrap $ leftoverF l (go next))
->     {- Yield  -} (\o finalizeRest next -> wrap $
->                         yieldF o (finalizeRest >> abortFinalize) (go next))
->     {- Await  -} (\f g onAbort -> wrap $
->                         awaitF (go . f) (go . g) (go onAbort))
 
 > finallyP :: Monad m => m () -> Pipe l i o u m r -> Pipe l i o u m r
 > finallyP finalize = cleanupP finalize finalize finalize
@@ -421,7 +438,7 @@ Some basic pipes
 >   Left Nothing  -> abort
 >   Left (Just u) -> return $ Left u
 >   Right i       -> return $ Right i
-
+> 
 > awaitForever :: Monad m => (i -> Pipe l i o u m r) -> Pipe l i o u m u
 > awaitForever f = go where
 >   go = awaitE >>= \ex -> case ex of
@@ -457,14 +474,11 @@ Some basic pipes
 >     Left _u -> return r
 >     Right i -> go $! f r i
 
-Bringing back the good(?) stuff
--------------------------------------------------
-
 > await :: Monad m => Pipe l i o u m i
 > await = awaitE >>= \ex -> case ex of
 >   Left _u -> abort
 >   Right i -> return i
-
+> 
 > oldPipe :: Monad m => (i -> o) -> Pipe l i o u m r
 > oldPipe f = forever $ await >>= yield . f
 > 
