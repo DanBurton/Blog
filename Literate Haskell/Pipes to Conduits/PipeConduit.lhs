@@ -1,4 +1,5 @@
 > {-# LANGUAGE DeriveFunctor #-}
+> {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 > {-# OPTIONS_GHC -Wall #-}
 > 
 > module PipeConduit where
@@ -6,8 +7,9 @@
 > import Control.Monad.Trans.Free (FreeT(..), FreeF(..), liftF, wrap)
 > 
 > import Data.Void (Void, absurd)
+> import Control.Applicative
 > import Control.Monad (when)
-> import Control.Monad.Trans.Class (lift)
+> import Control.Monad.Trans.Class
 > import Control.Monad.Trans.Resource (MonadResource, allocate, release)
 
 
@@ -30,7 +32,12 @@ The Pipe type
 >   | Leftover l next
 >   deriving Functor
 > 
-> type Pipe l i o u m r =  FreeT (PipeF l i o u m) m r
+> newtype Pipe l i o u m r = Pipe
+>   { unPipe :: FreeT (PipeF l i o u m) m r }
+>   deriving (Functor, Applicative, Monad)
+> 
+> instance MonadTrans (Pipe l i o u) where
+>   lift = Pipe . lift
 > 
 > type Producer   o   m r = Pipe Void () o    () m r
 > type Consumer l i u m r = Pipe l    i  Void u  m r
@@ -38,11 +45,11 @@ The Pipe type
 
 > pipeM :: m (FreeF (PipeF l i o u m) r (FreeT (PipeF l i o u m) m r))
 >       -> Pipe l i o u m r
-> pipeM m = FreeT m
+> pipeM m = Pipe (FreeT m)
 > 
 > runPipeM :: Pipe l i o u m r
 >          -> m (FreeF (PipeF l i o u m) r (FreeT (PipeF l i o u m) m r))
-> runPipeM (FreeT m) = m
+> runPipeM (Pipe (FreeT m)) = m
 
 Working with PipeF
 --------------------------------------------------
@@ -62,18 +69,24 @@ Working with PipeF
 > pipeCase (Wrap (Await f g))
 >   _ _ _ k = k f g
 
+> liftP :: Monad m => PipeF l i o u m a -> Pipe l i o u m a
+> liftP = Pipe . liftF
+
+> wrapP :: Monad m => PipeF l i o u m (FreeT (PipeF l i o u m) m a)
+>       -> Pipe l i o u m a
+> wrapP = Pipe . wrap
 
 Pipe primitives
 --------------------------------------------------
 
 > awaitE :: Monad m =>        Pipe l i o u m (Either u i)
-> awaitE = liftF $ Await Right Left
+> awaitE = liftP $ Await Right Left
 > 
 > yield :: Monad m => o ->    Pipe l i o u m ()
-> yield b = liftF $ Yield b pass ()
+> yield b = liftP $ Yield b pass ()
 > 
 > leftover :: Monad m => l -> Pipe l i o u m ()
-> leftover l = liftF $ Leftover l ()
+> leftover l = liftP $ Leftover l ()
 
 Pipe composition
 --------------------------------------------------
@@ -87,27 +100,28 @@ Pipe composition
 > composeWithFinalizer :: Monad m => m ()
 >                  -> Pipe Void i' o u' m r -> Pipe l i i' u m u' -> Pipe l i o u m r
 > composeWithFinalizer finalizeUpstream p1 p2 = pipeM $ do
+>   let go fin down up = unPipe $ composeWithFinalizer fin (Pipe down) (Pipe up)
 >   x1 <- runPipeM p1
 >   let p1' = pipeM $ return x1
 >   runPipeM $ pipeCase x1
 >   {- Return -} (\r       -> lift finalizeUpstream >> return r)
 >   {- L-over -} (\l _next -> absurd l)
 >   {- Yield  -} (\o finalizeDownstream next ->
->                       let (<*<) = composeWithFinalizer finalizeUpstream
->                       in wrap $ Yield o
->                           (finalizeUpstream >> finalizeDownstream)
->                           (next <*< p2))
+>                        let (<*<) = go finalizeUpstream
+>                        in wrapP $ Yield o
+>                            (finalizeUpstream >> finalizeDownstream)
+>                            (next <*< unPipe p2))
 >   {- Await  -} (\f1 g1 -> pipeM $ do
 >     x2 <- runPipeM p2
 >     runPipeM $ pipeCase x2
->     {- Return -} (\u'     -> g1 u' <+< return u')
->     {- L-over -} (\l next -> wrap $ Leftover l (p1' <?< next))
+>     {- Return -} (\u'     -> Pipe (g1 u') <+< return u')
+>     {- L-over -} (\l next -> wrapP $ Leftover l (unPipe $ p1' <?< Pipe next))
 >     {- Yield  -} (\o newFinalizer next ->
->                       let (<*<) = composeWithFinalizer newFinalizer
->                       in f1 o <*< next)
->     {- Await  -} (\f2 g2 -> wrap $ Await
->                           (\i -> p1' <?< f2 i)
->                           (\u -> p1' <?< g2 u)))
+>                       let (<*<) = go newFinalizer
+>                       in Pipe $ f1 o <*< next)
+>     {- Await  -} (\f2 g2 -> wrapP $ Await
+>                           (\i -> unPipe $ p1' <?< Pipe (f2 i))
+>                           (\u -> unPipe $ p1' <?< Pipe (g2 u))))
 
 > (>+>) :: Monad m => Pipe l i i' u m u' -> Pipe Void i' o u' m r -> Pipe l i o u m r
 > (>+>) = flip (<+<)
@@ -126,7 +140,7 @@ Running a pipeline
 >   {- Return -} (\r             -> return r)
 >   {- L-over -} (\l _next       -> absurd l)
 >   {- Yield  -} (\o _fin _next  -> absurd o)
->   {- Await  -} (\f _g          -> runPipe $ f ())
+>   {- Await  -} (\f _g          -> runPipe $ Pipe $ f ())
 
 
 Getting rid of leftovers
@@ -138,11 +152,11 @@ Getting rid of leftovers
 >     x <- runPipeM p
 >     runPipeM $ pipeCase x
 >     {- Return -} (\r -> return r)
->     {- L-over -} (\l next -> go (l:ls) next)
->     {- Yield  -} (\o fin next -> wrap $ Yield o fin (go ls next))
+>     {- L-over -} (\l next -> go (l:ls) (Pipe next))
+>     {- Yield  -} (\o fin next -> wrapP $ Yield o fin (unPipe $ go ls (Pipe next)))
 >     {- Await  -} (\f g -> case ls of
->       [] -> wrap $ Await (go [] . f) (go [] . g)
->       l : ls' -> go ls' (f l))
+>       [] -> wrapP $ Await (unPipe . go [] . Pipe . f) (unPipe . go [] . Pipe . g)
+>       l : ls' -> go ls' (Pipe $ f l))
 
 Adding finalizers to a pipe
 -------------------------------------------------
@@ -154,11 +168,11 @@ Adding finalizers to a pipe
 >     x <- runPipeM p
 >     runPipeM $ pipeCase x
 >     {- Return -} (\r -> lift returnFinalize >> return r)
->     {- L-over -} (\l next -> wrap $ Leftover l (go next))
->     {- Yield  -} (\o finalizeRest next -> wrap $
->                       Yield o (finalizeRest >> discardedFinalize) (go next))
->     {- Await  -} (\f g -> wrap $
->                       Await (go . f) (go . g))
+>     {- L-over -} (\l next -> wrapP $ Leftover l (unPipe $ go $ Pipe next))
+>     {- Yield  -} (\o finalizeRest next -> wrapP $
+>                       Yield o (finalizeRest >> discardedFinalize) (unPipe $ go $ Pipe next))
+>     {- Await  -} (\f g -> wrapP $
+>                       Await (unPipe . go . Pipe . f) (unPipe . go . Pipe . g))
 
 > finallyP :: Monad m => m () -> Pipe l i o u m r -> Pipe l i o u m r
 > finallyP finalize = cleanupP finalize finalize
