@@ -1,3 +1,16 @@
+Back in part 5, we added the ability to attach arbitrary finalizers
+to pipes. But when those finalizers actually ran was purely mechanical:
+when any given pipe finished, it would run all upstream finalizers, and then
+its own. This behavior can sometimes delay the finalization of an upstream 
+pipe, if the downstream pipe stops awaiting but continues running
+and possibly yielding.
+
+This time, we'll add the `close` primitive,
+which will allow the programmer to indicate that a pipe
+will never `await` again. This should possibly be named
+`unsafeClose`, because in this implementation,
+we will not use the type system to enforce this guarantee.
+
 > {-# LANGUAGE TypeOperators #-}
 > {-# OPTIONS_GHC -Wall #-}
 > 
@@ -13,7 +26,11 @@
 
 Functors
 --------------------------------------------------
- 
+
+We'll not add a new functor this time;
+we'll just reuse `Then` to indicate
+the "rest" of the computation after a pipe closes its input end.
+
 > newtype Then next = Then next            -- Identity
 > newtype Yield o next = Yield o           -- Const
 > newtype Await i next = Await (i -> next) -- Fun
@@ -54,6 +71,10 @@ The Pipe type
 > type AwaitU i u     = Await i :&: Await u :&: Then
 > type Close          = Then
 
+Our `PipeF` type has certainly grown! Remember when it used to be
+just `Await i :|: YieldThen o`? At least we're not adding yet another
+type parameter this time.
+
 > type PipeF l i o u m =  YieldThen o m
 >                     :|: AwaitU i u
 >                     :|: Abort
@@ -68,6 +89,8 @@ The Pipe type
 
 Working with PipeF
 --------------------------------------------------
+
+We update the lifts, the smart constructors, and `pipeCase` as usual.
 
 > liftYield :: YieldThen o m next ->              PipeF l i o u m next
 > liftYield = L . L . L . L
@@ -124,6 +147,8 @@ Working with PipeF
 Pipe primitives
 --------------------------------------------------
 
+We add a new primitive, as usual.
+
 > tryAwait :: Monad m =>      Pipe l i o u m (Either (Maybe u) i)
 > tryAwait = liftF $ awaitF Right (Left . Just) (Left Nothing)
 > 
@@ -149,6 +174,8 @@ Pipe composition
 > (<?<) :: Monad m => Pipe Void i' o u' m r -> Pipe l i i' u m u' -> Pipe l i o u m r
 > p1 <?< p2 = composeWithFinalizer unreachable p1 p2
 
+Now all uses of `pipeCase` must have an additional branch for `Close`.
+
 > composeWithFinalizer :: Monad m => m ()
 >                  -> Pipe Void i' o u' m r -> Pipe l i i' u m u' -> Pipe l i o u m r
 > composeWithFinalizer finalizeUpstream p1 p2 = FreeT $ do
@@ -157,7 +184,22 @@ Pipe composition
 >   runFreeT $ pipeCase x1
 >   {- Abort  -} (         lift finalizeUpstream >> abort)
 >   {- Return -} (\r ->    lift finalizeUpstream >> return r)
->   {- Close  -} (\next -> lift finalizeUpstream >> next <+< abort)
+>   {- Close  -} (\next -> lift finalizeUpstream >> (wrap $ closeF (next <+< abort)))
+
+The very reason that we made the Close option was so that
+the upstream pipe could be finalized early.
+Once we do that, what do we compose with `next`?
+We could compose it with `p2`, but that would be *very* unsafe,
+since `p2`'s finalizers have been run. Imagine if `p2` were reading
+from a file, then we close the file, then ask `p2` to keep reading!
+So instead, we compose with abort. Recall that earlier we asserted that
+right-composing a Producer with `abort` was the same as the identity function:
+
+$\forall p \in Producer, p \circ abort \equiv p$
+
+If it is indeed true that the downstream pipe will never `await` again,
+then we can rest assured that `next <+< abort` will behave as we desire.
+
 >   {- L-over -} (\l _next -> absurd l)
 >   {- Yield  -} (\o finalizeDownstream next ->
 >                       let (<*<) = composeWithFinalizer finalizeUpstream
@@ -170,6 +212,13 @@ Pipe composition
 >     {- Abort  -} (    onAbort1 <+< abort) -- downstream recovers
 >     {- Return -} (\u' -> g1 u' <+< abort) -- downstream recovers
 >     {- Close  -} (\next -> wrap $ closeF (p1' <?< next))
+
+Suppose that the upstream pipe `close`s its input end.
+If we have reached this point, then the up-upstream finalizers
+have already been run, so we need not worry about it.
+Upstream still has control, so we'll compose `next` with the
+unreachable finalizer, as we do for similar situations.
+
 >     {- L-over -} (\l next -> wrap $ leftoverF l (p1' <?< next))
 >     {- Yield  -} (\o newFinalizer next ->
 >                       let (<*<) = composeWithFinalizer newFinalizer
@@ -180,15 +229,21 @@ Pipe composition
 >                           (      p1' <?< onAbort2)))
 
 
+
 > (>+>) :: Monad m => Pipe l i i' u m u' -> Pipe Void i' o u' m r -> Pipe l i o u m r
 > (>+>) = flip (<+<)
-
+> 
 > infixr 9 <+<
 > infixr 9 >+>
 
 
 Running a pipeline
 --------------------------------------------------
+
+At the level of a pipeline, the `close` operation
+is meaningless, since it shouldn't be awaiting anyways.
+When we `runPipe` on a `Close`, therefore, we will simply move on
+to the next computation.
 
 > runPipe :: Monad m => Pipeline m r -> m (Maybe r)
 > runPipe p = do
@@ -205,6 +260,12 @@ Running a pipeline
 Getting rid of leftovers
 -------------------------------------------------
 
+The adjustment to `injectLeftovers` is interesting:
+once we close the input end, what should we do with leftovers?
+Discard them, since we promised not to look at them? Or keep them,
+since it doesn't hurt the upstream pipe if we look at the stuff
+that we already acquired from it.
+
 > injectLeftovers :: Monad m => Pipe i i o u m r -> Pipe l i o u m r
 > injectLeftovers = go [] where
 >   go ls p = FreeT $ do
@@ -212,15 +273,26 @@ Getting rid of leftovers
 >     runFreeT $ pipeCase x
 >     {- Abort  -} (abort)
 >     {- Return -} (\r -> return r)
->     {- Close  -} (\next -> wrap $ closeF (go ls next))
+>     {- Close  -} (\next -> wrap $ closeF (go [] next))
+
+In the name of garbage collection, I say dump them.
+This is reflected by the recursive call ignoring `ls` and instead
+passing in an empty list.
+
 >     {- L-over -} (\l next -> go (l:ls) next)
 >     {- Yield  -} (\o fin next -> wrap $ yieldF o fin (go ls next))
 >     {- Await  -} (\f g onAbort -> case ls of
 >       [] -> wrap $ awaitF (go [] . f) (go [] . g) (go [] onAbort)
 >       l : ls' -> go ls' (f l))
 
+
 Adding finalizers to a pipe
 -------------------------------------------------
+
+`Close` is always an intermediate step of a pipe
+(even if the next step is merely `return ()`),
+so when revisiting `cleanupP`, we need only make sure
+that the cleanup procedures are passed on to the next computation.
 
 > cleanupP :: Monad m => m () -> m () -> m () -> Pipe l i o u m r
 >          -> Pipe l i o u m r
@@ -237,6 +309,20 @@ Adding finalizers to a pipe
 >     {- Await  -} (\f g onAbort -> wrap $
 >                         awaitF (go . f) (go . g) (go onAbort))
 
+
+Playing with our new primitive
+-------------------------------------------------
+
+TODO: ghci session
+
+Next time
+-------------------------------------------------
+
+TODO: 
+
+Convenience combinators
+-------------------------------------------------
+
 > finallyP :: Monad m => m () -> Pipe l i o u m r -> Pipe l i o u m r
 > finallyP finalize = cleanupP finalize finalize finalize
 > 
@@ -252,24 +338,24 @@ Adding finalizers to a pipe
 >   (key, val) <- lift $ allocate create destroy 
 >   finallyP (release key) (mkPipe val)
 
+Some basic pipes
+-------------------------------------------------
+
 > idMsg :: String -> Pipe l i i u IO u
 > idMsg str = finallyP (putStrLn str) idP
-
+> 
 > testPipeR :: Monad m => Pipe Void i o u m r -> m (Maybe r)
 > testPipeR p = runPipe $ (await >> abort) <+< p <+< abort
-
+> 
 > testPipeL :: Monad m => Pipe Void Int o () m r -> m (Maybe r)
 > testPipeL p = runPipe $ (await >> await >> abort) <+< take' 1 <+< p <+< fromList [1 ..]
-
+> 
 > testPipe :: Monad m => Pipe Void Int o () m r -> m (Maybe (r, [o]))
 > testPipe p = runPipe $ runP <+< p <+< fromList [1..]
-
+> 
 > take' :: Monad m => Int -> Pipe l i i u m ()
 > take' 0 = pass
 > take' n = (await >>= yield) >> take' (pred n)
-
-Some basic pipes
--------------------------------------------------
 
 > fromList :: Monad m => [o] -> Producer o m ()
 > fromList = mapM_ yield
@@ -279,7 +365,7 @@ Some basic pipes
 >   Left Nothing  -> abort
 >   Left (Just u) -> return $ Left u
 >   Right i       -> return $ Right i
-
+> 
 > awaitForever :: Monad m => (i -> Pipe l i o u m r) -> Pipe l i o u m u
 > awaitForever f = go where
 >   go = awaitE >>= \ex -> case ex of
@@ -315,14 +401,11 @@ Some basic pipes
 >     Left _u -> return r
 >     Right i -> go $! f r i
 
-Bringing back the good(?) stuff
--------------------------------------------------
-
 > await :: Monad m => Pipe l i o u m i
 > await = awaitE >>= \ex -> case ex of
 >   Left _u -> abort
 >   Right i -> return i
-
+> 
 > oldPipe :: Monad m => (i -> o) -> Pipe l i o u m r
 > oldPipe f = forever $ await >>= yield . f
 > 
@@ -334,10 +417,6 @@ Bringing back the good(?) stuff
 > 
 > oldPrinter :: Show i => Consumer l i u IO r
 > oldPrinter = forever $ await >>= lift . print
-
-
-Next time
--------------------------------------------------
 
 
 You can play with this code for yourself by downloading
