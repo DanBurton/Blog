@@ -313,12 +313,76 @@ that the cleanup procedures are passed on to the next computation.
 Playing with our new primitive
 -------------------------------------------------
 
-TODO: ghci session
+Here's a simple example using (essentially) printf debugging
+to illustrate the code execution path. See if you can guess
+the output of `runPipe $ exampleConsumer <+< exampleProducer`
+before looking at it.
+
+> exampleProducer :: Producer Int IO ()
+> exampleProducer = finallyP (putStrLn "End producer") $ do
+>   lift $ putStrLn "Begin producer"
+>   lift $ putStrLn "Producer yielding"
+>   yield 1
+>   lift $ putStrLn "Producer done yielding"
+>   pass
+
+> exampleConsumer :: Consumer Void Int () IO ()
+> exampleConsumer = finallyP (putStrLn "End consumer") $ do
+>   lift $ putStrLn "Begin consumer"
+>   lift $ putStrLn "Consumer awaiting"
+>   _ <- await
+>   lift $ putStrLn "Consumer done awaiting"
+>   close
+>   lift $ putStrLn "Consumer continues"
+>   pass
+
+    [ghci]
+    runPipe $ exampleConsumer <+< exampleProducer
+      Begin consumer
+      Consumer awaiting
+      Begin producer
+      Producer yielding
+      Consumer done awaiting
+      End producer
+      Consumer continues
+      End consumer
+      Just ()
+
+As you can see, `close` caused the producer's finalizer to be run immediately.
+What would the output look like if the consumer didn't `close`?
+
+
+Safety
+-------------------------------------------------
+
+Our `close` primitive gives programmers a convenient way
+to indicate that a pipe's upstream should be finalized,
+but it is completely up to the programmer to make sure
+that `close` is used in a safe way, that is, that it is not
+followed by an `await`. We gave pipes the behavior of
+`abort`ing in such circumstances, which is a decent choice,
+but can we do better?
+
+Control.Frame from the `pipes` package provides a
+different (though similar) implementation of pipes that uses
+indexed monads to solve this problem. If you `close` a frame,
+then it is a *type error* to `await` afterwards.
+This has obvious type-safety benefits, but at the cost of
+using a relatively new concept that has little syntactic sugar
+support; see
+[Control.Pipe.Tutorial](http://hackage.haskell.org/packages/archive/pipes/latest/doc/html/Control-Frame-Tutorial.html)
+for details on how this technique works.
+
 
 Next time
 -------------------------------------------------
 
-TODO: 
+We've come a long ways from the simplicity of Control.Pipe.
+Next time, I'll take away `abort` and `close`, and what we have left
+will be fairly similar to the current state of Data.Conduit.
+I'll guide you through some of the `conduit` source code and
+observe which choices were made, and attempt to explain why.
+
 
 Convenience combinators
 -------------------------------------------------
