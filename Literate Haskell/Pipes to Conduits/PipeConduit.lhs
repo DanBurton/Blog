@@ -1,7 +1,8 @@
 In this series, we started with the simplest of Pipe implementations,
 and added features one by one until we reached Conduit-like functionality.
 Today, we'll strip away the `abort` and `close` features not present in Conduit
-(the former might be considered a misfeature), and compare the results.
+(the former might be considered a misfeature, though without using
+indexed monads it is a necessity for the latter), and compare the results.
 There is one major difference, which I believe illustrates a serious flaw
 in both implementations. I will illustrate this issue at the end of the post.
 
@@ -195,7 +196,7 @@ that I will point out. Let's compare the code case by case.
 
 Note that one *unimportant* difference is that `pipe'` has the two pipe inputs
 in the opposite order of `composeWithFinalizer`. So `left` is `p2` and `right`
-is `p1`. We both began by casing on the downstream pipe.
+is `p1`. We both begin by casing on the downstream pipe.
 
 >   {- Return -} (\r       -> lift finalizeUpstream >> return r)
 
@@ -472,7 +473,10 @@ Let's explore the discrepancy in finalization.
 > testPipeC :: Show o => C.Pipe Void Int o () IO r -> IO r
 > testPipeC p = C.runPipe $ printerC C.<+< p C.<+< C.sourceList [1..]
 
-Blah blah blah
+Now that we're equipped with a few convenient ways to create
+pipes with finalizers, let's see what happens when we compose
+three pipes together: the farthest downstream will cause termination,
+and the two upstream of it will both contain finalizers.
 
     [ghci]
     testPipeC $ (takeC 2 C.<+< idMsgC "foo") C.<+< idMsgC "bar"
@@ -490,7 +494,7 @@ the up-upstream finalizers. While I certainly approve of the use of
 ResourceT, I'm afraid that relying on it too much could be hiding
 these sorts of bugs in Conduit code.
 
-The deeply scary thing about this, though, is that it illustrates
+The deeply scary thing about this is that it illustrates
 that conduit composition is not associative. It's known now that pipes
 with upstream results do not behave entirely like a Category,
 but they nevertheless *should* try to behave as much like a Category
@@ -544,7 +548,7 @@ this situation.
 
 Ugh! While it didn't drop the `bar` finalizer (yay!),
 my choices for "consistency" were obviously wrong, because
-it does not preserve associativity of composition.
+it still does not preserve associativity of composition.
 
 > printerF :: Show i => F.Frame Void IO (F.M i) F.C r
 > printerF = foreverR $ (F.await !>= liftU . print)
@@ -579,11 +583,18 @@ Looks like somebody got it right. :)
 Next time
 -------------------------------------------------
 
-No next time, that's it folks!
+There is no next time; that's it folks!
 Personally, I will be taking a closer look at the order of finalizers;
 hopefully we can pick an order that always preserves the associativity
 of composition, and patch that into the next version of conduit!
 
+There are still a lot of interesting options to explore
+when it comes to implementing pipes. See also:
+
+ * Paolo Capriotti's [pipes-core](https://github.com/pcapriotti/pipes-core)
+ * Chris Smith's [my-pipes](https://github.com/cdsmith/my-pipes)
+ * Gabriel Gonzalez's [pipes](https://github.com/Gabriel439/Haskell-Pipes-Library)
+ * Michael Snoyman's [conduit](https://github.com/snoyberg/conduit)
 
 You can play with this code for yourself by downloading
 [PipeConduit.lhs](https://raw.github.com/DanBurton/Blog/master/Literate%20Haskell/Pipes%20to%20Conduits/PipeConduit.lhs).
