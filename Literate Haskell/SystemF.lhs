@@ -306,7 +306,7 @@ Basically, Haskell's type checker will prevent me from
 writing my type checker incorrectly.
 
   I think it would actually be safe to remove the Error wrapping
-around the result of this funciton, and always assume that it is correct,
+around the result of this function, and always assume that it is correct,
 because the Haskell type checker should prevent you from constructing
 an ill-typed Term in the first place.
 
