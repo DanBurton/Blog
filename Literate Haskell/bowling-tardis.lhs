@@ -177,3 +177,17 @@ a list of bowling scores, from the last frame to the first.
 
     [ghci]
     main
+
+Exercise:
+[download this code](https://raw.github.com/DanBurton/Blog/master/Literate%20Haskell/bowling-tardis.lhs),
+and remove the tilde (~) from line 129. What happens? Why?
+
+Next time
+======================================================================
+
+Bowling was a rather simple example, to warm you up to the idea
+of what a Tardis is and what it can do.
+Next time, we'll get even more timey-wimey by sketching out
+the concept of "seers" with nothing more than tardis primitives
+and a vague idea of some ground rules to rationally explain how
+you might describe a believable system of "seers" in a fictional setting.
