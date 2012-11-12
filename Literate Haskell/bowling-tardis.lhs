@@ -184,7 +184,7 @@ a list of bowling scores, from the last frame to the first.
 
 Exercise:
 [download this code](https://raw.github.com/DanBurton/Blog/master/Literate%20Haskell/bowling-tardis.lhs),
-and remove the tilde (~) from line 129. What happens? Why?
+and remove the tilde (~) from line 133. What happens? Why?
 
 Next time
 ======================================================================
