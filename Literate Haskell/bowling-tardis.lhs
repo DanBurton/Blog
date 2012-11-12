@@ -4,7 +4,11 @@
 A few months ago, I released the
 [tardis](http://hackage.haskell.org/package/tardis)
 package. I promised a few blog posts about it,
-but put it off until now. So here we go.
+but put it off until now.
+ If you haven't heard of my "tardis" package yet,
+then you should probably take a look at the hackage
+documentation I've already written up for
+[Control.Monad.Tardis](http://hackage.haskell.org/packages/archive/tardis/0.3.0.0/doc/html/Control-Monad-Tardis.html).
 
 Bowling
 ======================================================================
