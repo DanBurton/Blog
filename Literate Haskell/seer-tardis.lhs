@@ -29,12 +29,12 @@ and implement a Seer by using a Tardis.
 What is a Seer?
 ======================================================================
 
-A *seer* is someone that foretells the future.^[1]
+A *seer* is someone that foretells the future.^[[Wiktionary > seer]]
 But how do seers know the future? Suppose you are writing a novel,
 and you want to devise a semi-believable "system" for how seers work.
 What would the rules be?
 
-[1]: http://en.wiktionary.org/wiki/seer
+[Wiktionary > seer]: http://en.wiktionary.org/w/index.php?title=seer&oldid=18654193
 
 Well, rule number one for me is that in a legitimate system,
 all seers must agree about the future. If different seers predict
@@ -120,7 +120,7 @@ and run the tardis as usual.
 > runSeerT :: (MonadFix m, Monoid w) => SeerT w m a -> m a
 > runSeerT = flip evalTardisT (mempty, mempty) . unSeerT
 
-todo: prove it works
+todo: demonstrate that it works
 
 Seer in terms of a Reader/Writer
 ======================================================================
@@ -152,11 +152,10 @@ We accomplish this via `mfix`.
 > runRWSeerT (RWSeerT rwma) = liftM fst $
 >   mfix (\ ~(_, w) -> runWriterT (runReaderT rwma w))
 
-todo: prose
-todo: prove it works
+todo: demonstrate that it works
 
 So why use a Tardis?
 ======================================================================
 
 todo: prose
-
+todo: exercise: remove the `rec` annotation. What happens?
