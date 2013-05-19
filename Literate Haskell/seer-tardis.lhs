@@ -1,3 +1,6 @@
+    [BLOpts]
+    title = "Two implementations of Seers"
+
 Last time, we implemented a bowling game scorer
 by using a Tardis. If you aren't yet familiar with
 the Tardis's interface, then I recommend you check out
@@ -6,16 +9,21 @@ the Tardis's interface, then I recommend you check out
 except there are two streams of state,
 one forwards and one backwards,
 so there are four operations: `getPast`, `getFuture`,
-`sendPast`, and `sendFuture`.
+`sendPast`, and `sendFuture`.)
 
-Today, we'll take a large step in the esoteric drection,
+Today, we'll take another large step in the esoteric drection,
 and implement a Seer by using a Tardis.
+Why, you ask? My response: why not?
+There may be some deep motivating reasons for you to study this,
+but I don't pretend to know what those might be.
 
 > {-# LANGUAGE MultiParamTypeClasses #-}
 > {-# LANGUAGE FunctionalDependencies #-}
 > {-# LANGUAGE FlexibleInstances #-}
+> {-# LANGUAGE FlexibleContexts #-}
 > {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 > {-# LANGUAGE DoRec #-}
+> {-# OPTIONS_GHC -Wall #-}
 
 > import Control.Applicative (Applicative)
 > import Control.Monad (liftM)
@@ -99,6 +107,7 @@ The future is inquiring the present about its (the future's) past,
 which includes both the present and the past, or in other words,
 `past <> present`. The result of the `contact` is the whole universe,
 spanning all of time, in other words, `past <> present <> future`.
+In all cases, we want to make sure to keep things in "chronological" order.
 
 Did you follow all of that? In short, information from the past
 should be sent forwards to the future, and information from the
@@ -108,9 +117,9 @@ this flow of information easily using the Tardis operations:
 > instance (Monoid w, MonadFix m) => MonadSeer w (SeerT w m) where
 >   contact present = SeerT $ do
 >     rec past <- getPast
->         future <- getFuture
->         sendFuture (past <> present)
 >         sendPast (present <> future)
+>         sendFuture (past <> present)
+>         future <- getFuture
 >     return (past <> present <> future)
 
 Now, in order to "run" a seer operation, all we have to do
@@ -120,7 +129,33 @@ and run the tardis as usual.
 > runSeerT :: (MonadFix m, Monoid w) => SeerT w m a -> m a
 > runSeerT = flip evalTardisT (mempty, mempty) . unSeerT
 
-todo: demonstrate that it works
+Here is a dumb example demonstrating how it works.
+
+> dumbExample :: MonadSeer [Int] m => m [Int]
+> dumbExample = do
+>   world1 <- see
+>   send [world1 !! 2]
+>   send [1]
+>   world2 <- see
+>   send [world2 !! 1]
+>   world3 <- see
+>   return world3
+
+    [ghci]
+    runSeerT dumbExample
+      [1,1,1]
+
+It is actually unnecessary to `see` more than once,
+since it is always the unchanging truth of `past <> present <> future`.
+The following is equivalent:
+
+    [haskell]
+    dumbExample = do
+      world <- see
+      send [world !! 2]
+      send [1]
+      send [world !! 1]
+      return world
 
 Seer in terms of a Reader/Writer
 ======================================================================
@@ -152,10 +187,42 @@ We accomplish this via `mfix`.
 > runRWSeerT (RWSeerT rwma) = liftM fst $
 >   mfix (\ ~(_, w) -> runWriterT (runReaderT rwma w))
 
-todo: demonstrate that it works
+Here is a dumb example demonstrating that it works
+
+    [ghci]
+    runRWSeerT dumbExample
+      [1,1,1]
 
 So why use a Tardis?
 ======================================================================
 
-todo: prose
-todo: exercise: remove the `rec` annotation. What happens?
+For fun, obviously!
+
+More seriously, notice that we can "run" SeerT differently, depending
+on whether we implemented it with Tardis or with Reader/Writer.
+With Tardis, we can supply "bookends", the *further* past and the
+*further* future.
+
+> runSeerTWith :: (MonadFix m, Monoid w) => w -> w -> SeerT w m a -> m a
+> runSeerTWith past future = flip evalTardisT (future, past) . unSeerT
+
+Exercise:
+Predict the output of `runSeerTWith [10, 11, 12] [16, 17, 18] dumbExample`.
+
+Whereas with the reader/writer pair, we can fool the seers
+by giving them a false reality.
+
+> runRWSeerTWith :: (Monoid w, Monad m) => w -> RWSeerT w m a -> m a
+> runRWSeerTWith falseReality (RWSeerT rwma) = liftM fst $
+>   runWriterT (runReaderT rwma falseReality)
+
+Exercise:
+Predict the output of `runRWSeerTWith [10, 11, 12] dumbExample`.
+
+What the ramifications of these are, I really don't know.
+I just follow the types, lean on the laziness, and things
+just seem to work in Haskell, even mystical things like time travel
+and seers.
+
+[Download this code and play with it!](https://raw.github.com/DanBurton/Blog/master/Literate%20Haskell/seer-tardis.lhs)
+Don't forget to `cabal install tardis` first.
