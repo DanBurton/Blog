@@ -1,3 +1,6 @@
+#!/usr/bin/env stack
+> -- stack --resolver lts-8 --install-ghc runghc --package pipes --package free
+
 Last time we quickly reviewed several
 basic Functors in Haskell, and various ways
 to combine them. Today, we will
@@ -6,6 +9,7 @@ and rewrite Control.Pipe
 (not that it needs rewriting;
 we're just doing this for fun).
 
+> {-# LANGUAGE TypeApplications #-}
 > {-# LANGUAGE TypeOperators #-}
 > {-# OPTIONS_GHC -Wall #-}
 > 
@@ -131,10 +135,10 @@ we will be performing case analysis at the level of FreeF.
 >          -> (o -> next   -> a) -- Yield
 >          -> ((i -> next) -> a) -- Await
 >                          -> a
-> pipeCase (Return r) k _ _ = k r
-> pipeCase (Wrap (L (Yield o :&: Then next)))
+> pipeCase (Pure r) k _ _ = k r
+> pipeCase (Free (L (Yield o :&: Then next)))
 >                     _ k _ = k o next
-> pipeCase (Wrap (R (Await f)))
+> pipeCase (Free (R (Await f)))
 >                     _ _ k = k f
 
 
@@ -288,11 +292,12 @@ because next time we're going to have to change them.
 
 Testing...
 
-    [ghci]
-    runPipe $ printer <+< pipe (+1) <+< filterP even <+< fromList [1 .. 5]
-    runPipe $ idP <+< idP <+< return "Hello, pipes" <+< idP <+< idP
-    runPipe $ return "Downstream drives" <+< return "Upstream doesn't"
-    runPipe $ (printer >> return "not hijacked") <+< return "hijacked"
+> main :: IO ()
+> main = do
+>   runPipe $ printer <+< pipe (+1) <+< filterP even <+< fromList [1 :: Int .. 5]
+>   putStrLn =<< (runPipe $ idP <+< idP <+< return "Hello, pipes" <+< idP <+< idP)
+>   putStrLn =<< (runPipe $ return "Downstream drives" <+< return "Upstream doesn't")
+>   putStrLn =<< (runPipe $ (printer @Int >> return "not hijacked") <+< return "hijacked")
 
 Next time
 -------------------------------------------------

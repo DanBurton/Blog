@@ -1,3 +1,6 @@
+#!/usr/bin/env stack
+> -- stack --resolver lts-8 --install-ghc runghc
+
 A Functor in Haskell is a type of kind `f :: * -> *`,
 which supports the operation `fmap :: (a -> b) -> f a -> f b`.
 Many "container" types are Functors,
@@ -175,6 +178,8 @@ we can use `:&:` to bundle information together.
 Again, left-only or right-only Functor instances are possible,
 but unnecessary for my needs.
 
+> main :: IO ()
+> main = putStrLn "Yes, it compiles"
 
 Next time
 --------------------------------------------------
